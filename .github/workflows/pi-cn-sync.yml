@@ -1,7 +1,7 @@
 name: Pi Sync Upstream
 on:
   schedule:
-    - cron: "23 * * * *"   # 每小时 :23，错开其他流水线
+    - cron: "23 1,5,9,13,17,21 * * *"   # 每 4 小时（01/05/09/13/17/21 UTC）:23，错开其他流水线
   workflow_dispatch:
 permissions:
   contents: write
