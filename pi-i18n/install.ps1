@@ -1,8 +1,8 @@
-# pi Chinese localization (yuloop/pi) one-click installer - Windows x64 (PowerShell 5.1+)
+# pi Chinese localization (yuloop/pi-cn) one-click installer - Windows x64 (PowerShell 5.1+)
 #
 # Usage:
-#   powershell -Command "irm https://raw.githubusercontent.com/yuloop/pi/main/pi-i18n/install.ps1 | iex"
-#   powershell -Command "irm https://raw.githubusercontent.com/yuloop/pi/main/pi-i18n/install-preview.ps1 | iex"
+#   powershell -Command "irm https://raw.githubusercontent.com/yuloop/pi-cn/main/pi-i18n/install.ps1 | iex"
+#   powershell -Command "irm https://raw.githubusercontent.com/yuloop/pi-cn/main/pi-i18n/install-preview.ps1 | iex"
 #
 # Options:
 #   -Preview    install latest realtime preview release (*-cn-nightly)
@@ -20,8 +20,8 @@ $ErrorActionPreference = 'Stop'
 # Compat: install-preview.ps1 may set $script:Preview before invoking this script
 if (-not $Preview -and $script:Preview) { $Preview = $true }
 
-$ApiBase = 'https://api.github.com/repos/yuloop/pi/releases'
-$DownloadBase = 'https://github.com/yuloop/pi/releases/download'
+$ApiBase = 'https://api.github.com/repos/yuloop/pi-cn/releases'
+$DownloadBase = 'https://github.com/yuloop/pi-cn/releases/download'
 $ApiHeaders = @{ 'User-Agent' = 'pi-cn-installer' }
 
 $tmpDir = $null

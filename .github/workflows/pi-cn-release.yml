@@ -308,13 +308,13 @@ jobs:
           Windows PowerShell：
 
           \`\`\`powershell
-          powershell -Command "irm https://raw.githubusercontent.com/yuloop/pi/main/pi-i18n/install.ps1 | iex"
+          powershell -Command "irm https://raw.githubusercontent.com/yuloop/pi-cn/main/pi-i18n/install.ps1 | iex"
           \`\`\`
 
           Linux / WSL：
 
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/yuloop/pi/main/pi-i18n/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/yuloop/pi-cn/main/pi-i18n/install.sh | bash
           \`\`\`
 
           详见仓库 \`pi-i18n/README.md\`。

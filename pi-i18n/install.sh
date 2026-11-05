@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pi 汉化版（yuloop/pi）一键安装脚本 —— Linux x64（含 WSL）
+# pi 汉化版（yuloop/pi-cn）一键安装脚本 —— Linux x64（含 WSL）
 #
 # 用法：
 #   install.sh                安装最新正式版（*-cn，跟随上游正式 Release，稳定）
@@ -10,8 +10,8 @@
 # 安装目录：~/.pi-cn（用户数据在 ~/.pi/agent，与安装目录无关，可放心覆盖）
 set -euo pipefail
 
-API="https://api.github.com/repos/yuloop/pi/releases"
-DL="https://github.com/yuloop/pi/releases/download"
+API="https://api.github.com/repos/yuloop/pi-cn/releases"
+DL="https://github.com/yuloop/pi-cn/releases/download"
 
 MODE="stable"
 SPECIFIC_TAG=""
