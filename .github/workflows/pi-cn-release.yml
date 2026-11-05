@@ -6,7 +6,7 @@ name: Pi Chinese Release
 
 on:
   schedule:
-    - cron: "3 2,8,14,20 * * *"
+    - cron: "3 2,10,18 * * *"
   workflow_dispatch:
     inputs:
       upstream_ref:
