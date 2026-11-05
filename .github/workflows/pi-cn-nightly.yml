@@ -7,7 +7,7 @@ name: Pi Chinese Nightly
 
 on:
   schedule:
-    - cron: "51 3,9,15,21 * * *"
+    - cron: "51 4,10,16,22 * * *"
   workflow_dispatch:
     inputs:
       upstream_ref:

@@ -2,9 +2,12 @@ name: npm audit
 
 on:
   schedule:
-    - cron: '37 7 * * *'
+    - cron: '37 11 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: npm-audit
+  cancel-in-progress: false
 permissions:
   contents: read
 
