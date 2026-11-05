@@ -46,5 +46,20 @@ jobs:
             git add -A 2>/dev/null || true
           fi
           git restore --source=HEAD --staged --worktree .github/workflows
+          # `git restore` 只还原 HEAD 里已存在的文件，不会删除上游「新增」的 workflow
+          # （nix.yml / preview-packages.yml / publish-model-catalog.yml）。
+          # 残留会让 push 因缺少 workflows 权限被拒，这里显式删掉。
+          git ls-files .github/workflows | while IFS= read -r f; do
+            if ! git cat-file -e "HEAD:$f" 2>/dev/null; then
+              echo "移除上游新增的 workflow: $f"
+              git rm -f -q "$f"
+            fi
+          done
+          # 兜底自检：暂存区里的 .github/workflows 必须与 HEAD 完全一致
+          if ! git diff --cached --quiet HEAD -- .github/workflows; then
+            echo "ERROR: .github/workflows 仍与 HEAD 有差异，拒绝 push"
+            git diff --cached HEAD -- .github/workflows --name-status | head -20
+            exit 3
+          fi
           git commit --no-edit || echo "无变更，跳过提交"
           git push origin main

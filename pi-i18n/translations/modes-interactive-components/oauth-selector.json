@@ -7,9 +7,11 @@
     "No providers available": "没有可用的提供商",
     "No providers logged in. Use /login first.": "没有已登录的提供商。请先使用 /login。",
     "No matching providers": "没有匹配的提供商",
-    "subscription configured": "已配置订阅",
-    "API key configured": "已配置 API 密钥",
+    "${formatAuthSelectorProviderType(provider.status.type, provider.subscription)} configured": "${formatAuthSelectorProviderType(provider.status.type, provider.subscription)} 已配置",
+    "theme.fg(\"success\", \" ✓ configured\")": "theme.fg(\"success\", \" ✓ 已配置\")",
+    "\"API key\"": "\"API 密钥\"",
+    "? \"account\" : \"subscription\"": "? \"账户\" : \"订阅\"",
     "stored credential": "已存凭据",
-    "unconfigured": "未配置"
+    "theme.fg(\"muted\", \" • not configured\")": "theme.fg(\"muted\", \" • 未配置\")"
   }
 }

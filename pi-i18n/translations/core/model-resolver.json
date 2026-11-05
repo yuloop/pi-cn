@@ -6,9 +6,9 @@
     "Unknown provider \"${cliProvider}\". Use --list-models to see available providers/models.": "未知提供商 \"${cliProvider}\"。使用 --list-models 查看可用的提供商/模型。",
     "No matching provider is authenticated.": "没有匹配的已认证提供商。",
     "More than one matching provider is authenticated.": "有多个匹配的已认证提供商。",
-    "Invalid thinking level \"${suffix}\" in pattern \"${pattern}\". Using default instead.": "模式 \"${pattern}\" 中的思考级别 \"${suffix}\" 无效，改用默认值。",
+    "Invalid thinking level \"${suffix}\" in pattern \"${text}\". Using default instead.": "模式 \"${text}\" 中的思考级别 \"${suffix}\" 无效，改用默认值。",
     "Model \"${cliModel}\" is ambiguous across providers: ${matches}. ${authHint} Use --provider or provider/model.": "模型 \"${cliModel}\" 在多个提供商间存在歧义：${matches}。${authHint} 请使用 --provider 或 提供商/模型。",
-    "${warning} Model \"${fallbackPattern}\" not found for provider \"${provider}\". Using custom model id.": "${warning} 提供商 \"${provider}\" 下找不到模型 \"${fallbackPattern}\"，改用自定义模型 ID。",
-    "Model \"${display}\" not found. Use --list-models to see available models.": "找不到模型 \"${display}\"。使用 --list-models 查看可用模型。"
+    "Model \"${modelId}\" not found for provider \"${target.provider}\". Using custom model id.": "提供商 \"${target.provider}\" 下找不到模型 \"${modelId}\"，改用自定义模型 ID。",
+    "Model \"${cliModel}\" not found. Use --list-models to see available models.": "找不到模型 \"${cliModel}\"。使用 --list-models 查看可用模型。"
   }
 }
