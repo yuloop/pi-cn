@@ -1,7 +1,7 @@
 name: Pi Sync Upstream
 on:
   schedule:
-    - cron: "23 0,6,12,18 * * *"   # 每 4 小时（01/05/09/13/17/21 UTC）:23，错开其他流水线
+    - cron: "23 0,6,12,18 * * *"   # 每 6 小时（00/06/12/18 UTC）:23；每次合并会触发 45-110 分钟 CI，不宜更密
   workflow_dispatch:
 concurrency:
   group: pi-cn-sync
