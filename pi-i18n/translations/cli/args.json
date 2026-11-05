@@ -17,7 +17,7 @@
     "Update pi, extensions, or model catalogs": "更新 pi、扩展或模型目录",
     "List installed extensions from settings": "列出设置中已安装的扩展",
     "Open TUI to enable/disable package resources (Tab switches scope)": "打开 TUI 启用/禁用包资源（Tab 切换作用域）",
-    "Print credentials or check provider readiness": "打印凭据或检查提供商就绪状态",
+    "Log in or out, print credentials, or check provider readiness": "登录或登出、打印凭据，或检查提供商就绪状态",
     "Show help for install/remove/uninstall/update/list/config/auth": "查看 install/remove/uninstall/update/list/config/auth 的帮助",
     "Provider to search for --model (requires --model)": "用于 --model 搜索的提供商（需要 --model）",
     "Model pattern or ID (supports \"provider/id\" and optional \":<thinking>\")": "模型模式或 ID（支持 \"provider/id\" 与可选的 \":<thinking>\"）",
