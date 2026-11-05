@@ -47,12 +47,11 @@ P2_FAKE=1 npm start          # http://127.0.0.1:8788, data in ~/.pi/p2
   immediately. At most two previous generations remain available for up to 60 seconds. This polling is temporary
   until loader model D provides scoped, per-facet `ClientBundle` pushes (`docs/plugin-loading.md` 5.3 and 12.2 step
   4). The TUI launcher separately polls `/__p2_tui`. There is no Vite, source-module server or `index.html`.
-- **Bundles for Radius Cloud Brain:** the public repo `earendil-works/bundled-ui` holds prebuilt copies of this web
-  bundle, built from a pi-private checkout by its `scripts/build.mts` (imports `buildWebBundle`). The script patches
-  three places in the built script: the Chord socket URL (`` new WebSocket(`${...}://${location.host}/chord`) ``),
-  the version poll (`fetch("/__p2_web",{cache:"no-store",credentials:"same-origin"})`) and the `/__p2_web/` asset
-  prefix. It fails when a target is missing, so changing those in `src/hosts/web/main.tsx` or `WEB_BUNDLE_PATH` means
-  updating that script.
+- **Bundles for Radius Cloud Brain:** after CI passes on main, `.github/workflows/p2-cloud-bundle.yml` builds this
+  web bundle with `scripts/cloud-bundle.ts` and uploads it to the R2 bucket `pi-ui` under the commit's full SHA, which
+  Radius serves under `/pi/ui/`. The script patches the built script's Chord socket URL, version poll and `/__p2_web/`
+  asset prefix, and fails when one is missing: changing those in `src/hosts/web/main.tsx` or `WEB_BUNDLE_PATH` means
+  updating it.
 - `npm run dev` also watches plugins and supervises runtime restarts; see **Dev mode** below. Under `npm start`,
   code changes (web included) take effect only after a restart.
 - **Data report** (`scripts/data-report.ts`, read-only, beside a live server): per session its title, location,
@@ -342,6 +341,11 @@ p2 runs on Chord v2 (`packages/chord`, `docs/design.md` there); the port's notes
   where it lives with `hostAddress` (`serverHost`, `sessionHost`); a worker serves only its own session, so factories
   no longer compare `host.name`. The session workers are Chord's `createWorkers` (`src/hosts/session-workers.ts`:
   generations, logs and notices, relocation and pauses on `stop`/`retry`).
+- **Worker base:** session workers fork from Chord's worker base of `src/hosts/worker.ts` (split at dynamic imports).
+  The entry imports only the worker's side (`@earendil-works/chord/workers/child`, `src/hosts/host-packages.ts`), so a
+  fork loads no esbuild and no server API; pi-ai's provider SDKs load with their first request. It registers pi-ai's
+  lazy OAuth flows and Bedrock (`registerLazyOAuthFlows`, `registerLazyBedrockProvider`): chunks of the snapshot, not
+  pi-ai's source files (`test/p2/worker-base.test.ts`, `worker-oauth.test.ts`).
 - **Worker failures:** a failed start stays failed (status error, Retry) and its holders wait (`failed { waiting }`,
   `whenLive` does not reject: tests use `failureOf`). A running worker that crashes is restarted for its holders, at
   most five times a minute per session; the next crash waits for Retry. A worker stays alive while objects
@@ -677,9 +681,11 @@ translated phone drawer and intercept chat taps.
   and the TUI's `watch` go where the contract places the input. `WorkerBoundary`, `SessionTransfer`
   and `PluginRemoval` (version 2) take a `session` input for that. Moving a type is a contract break.
 - **Authors** are assigned by the worker from the principal and stored in the input's entry data (`p2.input`,
-  `src/runtime/input.ts`); a peer session's message is a `p2.peer-message` entry (`src/runtime/entries.ts`). The
-  model message of both starts with a `<sender kind="owner|guest|session" …/>` block (`src/runtime/sender.ts`,
-  values escaped), which the preamble explains and nothing reads back: readers and `originOf` use the entry data.
+  `src/runtime/input.ts`); a peer session's message is a `p2.peer-message` entry, a subagent's report or `team`
+  message a `p2.agent-message` entry (`src/runtime/entries.ts`). Their model message starts with a
+  `<sender kind="owner|guest|session|subagent" …/>` block (`src/runtime/sender.ts`, values escaped; a subagent's
+  text follows as `[<intent>] <text>`), which the preamble explains and nothing reads back: readers and `originOf`
+  use the entry data.
   Stop/dequeue restore text only to its author; removing a queued input (×,
   no restore) discards it, as in Pi Mobile.
 - **Windowed conversation view** (`plugins/chat/worker.ts`, `src/web/history.ts`, `src/runtime/conversation-stats.ts`):
@@ -754,7 +760,25 @@ translated phone drawer and intercept chat taps.
   a send failing six times while connected put the text, attachments and reply target back into the composer with
   the error; Stop takes back what was not sent yet. The outbox lives for the page: leaving with unsent messages asks
   first. Who the page is (`useOwner`, a guest's grant) is kept while reconnecting, so the composer never turns into
-  the "Connecting…" bar after a drop; only a page that never connected shows it.
+  the "Connecting…" bar after a drop; only a page that never connected shows it. A message sent before the
+  conversation has loaded shows alone until it does. A message whose send started while no run was busy stays a
+  message until its entry shows: the run it starts lists it as queued for a moment, and the server's state can arrive
+  before the send's answer, so it would otherwise flash as a queued row above the composer and move it.
+- **A new session's first message** (`plugins/chat/session-start.ts`) does not wait either: Send on the new-session
+  screen clears the composer and shows the message there at once, online or not, above the session's (empty) context
+  bar, so the composer stays in place when the session opens; it is the same composer (see **Chat frame**), so it
+  keeps its focus and a phone's keyboard. The session is created (with the location and model chosen at that Send) whenever the owner's catalog is live, its messages move to the main
+  conversation's outbox, which delivers them, and the page opens the session. Messages sent meanwhile join the same
+  session. A creation the server refuses (its own errors: a missing directory, an unknown model) puts the messages
+  back into the composer with the error; a connection failure is retried like an outbox send. A creation whose answer
+  was lost with the connection can leave an empty session behind (`create` takes no request ID).
+- **Chat frame** (`Main` in `plugins/chat/web.tsx`): the chat's `.chat` area and its dock outlive the screens shown in
+  it (the new-session screen, a conversation, the next one). There is one composer, in the dock: a screen publishes
+  what the dock shows (`useChatScreen`: a bar above, the composer's settings, queued rows, the footer, or a bar in the
+  composer's place) after each of its renders, and renders its transcript into the frame's `.chat-view` (a
+  `display: contents` element) through a portal. Changing screens never replaces the composer's textarea, so it keeps
+  its focus and a phone's keyboard. Slots wrapping a screen start with the plugin registry's known table
+  (`knownRegistry`), so a screen mounts once, not again when its wrappers arrive a render later.
 - **Virtual transcript** (`src/web/use-chat-scroll.ts`, `virtual-list.ts`, `row-estimate.ts`, `scroll-gesture.ts`;
   after TanStack Virtual and react-virtuoso, without depending on either): the web transcript renders only the rows
   near the viewport (one viewport of overscan each way, everything up to the first row near the list's start) between
@@ -1071,7 +1095,7 @@ translated phone drawer and intercept chat taps.
   by its author in the entry data, an agent-written one by its `origin`. Agent-written inputs record the writing
   turn's origin: subagent tasks and one-shot agents' prompts (`p2.subagent-task`), `team` messages and reports
   (`p2.agent-message`; a report has the origin of the subagent's run that answered, `answerOrigin`: its inputs after
-  the previous run's last answer), and peer messages (`p2.peer-message`). A guest's input steered into a run takes the
+  the previous run's final answer, `stop` or `length`, past mid-run error answers and compaction markers), and peer messages (`p2.peer-message`). A guest's input steered into a run takes the
   owner's tools away for the rest of it; a guest-started chain never reaches them. Known gap: inputs of earlier runs
   still in the context are not considered. `test/p2/inputs.test.ts`, `dev-tools.test.ts`, `tool-access.test.ts`.
 - **Code mode** (`plugins/codemode`): the worker facet registers Durable's `codemode` extension
