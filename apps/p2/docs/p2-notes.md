@@ -27,7 +27,7 @@ P2_FAKE=1 npm start          # http://127.0.0.1:8788, data in ~/.pi/p2
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `P2_DATA_DIR` | `~/.pi/p2` | data directory: `catalog.sqlite`, `sessions/<id>.sqlite`, `settings.json`, `models.json`, `envs.json`, `mcp.json`, `mcp-auth.json`, `auth.json`, `radius.json`, `forwards.json` |
+| `P2_DATA_DIR` | `~/.pi/p2` | data directory: `catalog.sqlite`, `server/` and `sessions/<id>/` (see **Host stores and files**), `settings.json`, `models.json`, `envs.json`, `mcp.json`, `mcp-auth.json`, `auth.json`, `radius.json`, `forwards.json` |
 | `PORT` | `8788` | listen port (loopback only), so p2 never collides with pi-mobile on 8787 |
 | `P2_FAKE` | unset | `1`: the faux provider (`faux/faux-1`, echoes the prompt; `slow …` streams long; `rename-session <title>` calls the tool; `subagent`, `subagent-bad`, `subagent-answer`, `subagent-configure`, `subagent-send`, `subagent-archive`, `subagent-status` exercise subagents, `subagent <json>` calls the tool with those arguments, as do `team <json>`, `history_search|read|handoff <json>`, `location_envs|dirs|move <json>`, `tool_search <json>`, `terminal <json>` and `mcp__<server>__<tool> <json>`; `codemode` runs a script calling bash and read, `codemode-restart` one whose slow middle call a restart interrupts, `codemode <script>` runs that script; `artifact <json>` calls the artifact tool with those arguments; `json <text>` answers exactly `<text>`; a one-shot agent whose task is not `json …`/`slow…` answers a small value matching its schema) |
 | `P2_IDLE_MS` | `300000` | idle time before a session worker stops |
@@ -212,7 +212,8 @@ Terminal interface through the bridge and loads the TUI facets plus `tuiCoreFace
 registries) on a Chord client host whose parent link is relayed as binary messages; it has no Node socket or local
 module loader.
 
-The launcher recognizes output, opaque chord-link frames, reload and exit requests, plus (p2-tui-port.md 3.6a)
+The launcher recognizes output, opaque chord-link frames, `linkClosed` (the worker's link closed on its own, e.g. Chord's
+heartbeat found the socket silent: the launcher terminates the socket and reconnects), reload and exit requests, plus (p2-tui-port.md 3.6a)
 `navigation`/`keyContext` reports, sanitized and rate-limited `title`/`progress`/`programStatus`, and `request`s for
 registered launcher actions, which run only under a grant: the visitor's own privileged key or a confirmation in the
 launcher-drawn consent screen (worker IO suspended meanwhile). Unknown requests are denied. Worker-set terminal modes
@@ -258,7 +259,9 @@ The launcher polls the bundle version every second. A changed hash prepares a ne
 active; once ready, it copies bounded UI state (selection, drafts, send retry IDs, display toggles, reading position),
 swaps the fixed-origin connection and terminates the old worker. Failed preparation retains the old worker.
 `/reload` also creates a fresh worker, even for an unchanged hash. There is no local watcher or local facet reload.
-Network drops reconnect with bounded exponential backoff; Chord rebinds the held references.
+Network drops reconnect with bounded exponential backoff; Chord rebinds the held references. A connection that died
+without a close (a laptop that slept while Radius dropped it) is found by the worker's Chord heartbeat within 30 s:
+`linkClosed` makes the launcher drop that socket (`tui-launcher.test.ts`, silent link).
 Image attachments/results remain text placeholders; no attachment uploader, browser sheets, terminal panel or
 provider-login screen is provided.
 
@@ -341,6 +344,37 @@ p2 runs on Chord v2 (`packages/chord`, `docs/design.md` there); the port's notes
   where it lives with `hostAddress` (`serverHost`, `sessionHost`); a worker serves only its own session, so factories
   no longer compare `host.name`. The session workers are Chord's `createWorkers` (`src/hosts/session-workers.ts`:
   generations, logs and notices, relocation and pauses on `stop`/`retry`).
+- **Host stores and files** (per-host stores; laid out as the app kit lays out its hosts, `src/runtime/host-dirs.ts`):
+  every host has its own Chord store and files directory, private (directories 0700, stores 0600). The server:
+  `<data>/server/store.sqlite` (outbox off: local-only data, credentials included, never goes to a sync) and
+  `<data>/server/files/`; each session: `<data>/sessions/<id>/store.sqlite` (outbox off until p2 syncs: it records
+  nothing while not connected to a sync; turning it on starts at the current commit, and a first sync uploads an
+  archive) and `<data>/sessions/<id>/files/`.
+  Projects will be another host kind of the same shape. Both hosts load the app kit's `Files` (`chord.app.files`,
+  `filesFacet` from `@earendil-works/chord/app/files`); a session's Durable runs on its store through `StoreStorage`
+  under the owner name `p2.durable` (`src/runtime/session-store.ts`), beside `Files`' tables. Plugins reach `Files`
+  with `self.get(Files, {})` / `ctx.get(Files, {})` (`@p2/app/v1/node`), never a path; a session's spaces are
+  `artifacts`, `uploads` and `downloads` (`src/runtime/session-files.ts`). Clone copies the whole session directory
+  while its worker is stopped (blobs hard-linked); fork copies only the source's files, through its worker
+  (`SessionTransfer.copyFiles`, the kit's `copyFiles`), and seeds its history into a fresh store; a failed copy's
+  directory is removed. Each change of a space is pushed by the worker, inside the method that made it, to the server's
+  mirror `FileSummaries` (by session and space; the owner's `of`), for lists that must not start a worker: none uses it
+  yet (the artifact picker and transcript cards are on an open session's worker); a session row's file counts or a
+  drive of an idle session could. A data directory in the older layout (`server.sqlite`, `sessions/<id>.sqlite`,
+  `artifacts/`, `downloads/`) is refused at start: `npm run migrate-data` moves it (below).
+- **Migration** (`npm run migrate-data -- [--dry-run] [--data <dir>]`, `scripts/migrate-data.ts`): offline (refused
+  while a server holds the data directory's lock, which it takes). The server's store is copied to `server/store.sqlite`
+  and verified (equal exports); each session is built in `sessions/.<id>.migrating/` from a copy of its old store:
+  Durable's records replayed into `StoreStorage` in seq order (`scripts/migrate-durable.ts`: seqs renumbered in order,
+  ids kept, the allocator past the old next id) and its artifacts (same version numbers), uploads and downloads (same
+  ids, as keys; each file's time from the old file's modification time, through `Files`' `created` for imports) written
+  into its `Files` (`scripts/migrate-files.ts`); then verified (every record read through
+  Durable's `Storage` from both, every file byte for byte), renamed into place, and only then its old files moved to
+  `pre-files-backup/` (same relative paths). `uploads/<session>/` stays: it is where this machine materializes
+  attachments now, and old transcripts name those paths. A crash redoes the session it was in; a second run skips
+  what is done. `--dry-run` builds and verifies everything in a temporary directory. `scripts/data-report.ts` reads
+  either layout: a report before and `--compare` after shows any difference. Tests: `pre-files-data.test.ts` (a data
+  directory made by p2 just before this change), `v1-data.test.ts`.
 - **Worker base:** session workers fork from Chord's worker base of `src/hosts/worker.ts` (split at dynamic imports).
   The entry imports only the worker's side (`@earendil-works/chord/workers/child`, `src/hosts/host-packages.ts`), so a
   fork loads no esbuild and no server API; pi-ai's provider SDKs load with their first request. It registers pi-ai's
@@ -392,7 +426,7 @@ p2 runs on Chord v2 (`packages/chord`, `docs/design.md` there); the port's notes
 - **Contract versions:** pages and TUIs keep the contracts they were built with until they reload, so a deploy that
   bumps a contract a client holds must keep serving the old version: write the history with `evolve` (the released
   version as the base, verbatim, so old bundles' fingerprints match) and give the provider an `accepts` table mapping
-  current state and results back (`Sessions` v3/v4, `Catalog` v2/v3, `SessionTree` v1, `Envs` v1;
+  current state and results back (`Sessions` v3/v4, `Catalog` v2/v3, `SessionTree` v1, `Envs` v1/v2;
   `test/p2/contract-versions.test.ts` binds the released declarations). Without it, old clients wait unbound
   (`contract_mismatch`) until they reload.
 
@@ -654,7 +688,7 @@ translated phone drawer and intercept chat taps.
   need the remote confirmation when any of the session's conversations works on a remote environment
   (`remoteEnvironments`; `Sharing.env` lists them).
 - **Session lifecycle operations** (`SessionOperations`, server, a host-lifetime `local` object of the sessions plugin;
-  its job runs persist in the server's Chord store `<data>/server.sqlite` and run again after a crash, each run
+  its job runs persist in the server's Chord store `<data>/server/store.sqlite` and run again after a crash, each run
   idempotent): `relocate`, `clone`, `fork` and `archive` answer once their visible effect committed on the server and
   run their long part as a job. `create`, `clone` and `fork` take a client-chosen ID (`id`, `copy`), so a page
   navigates before the answer; a chosen ID already in the catalog answers its row (a retry). `clone` and `fork` answer
@@ -808,9 +842,10 @@ translated phone drawer and intercept chat taps.
   (`theme.ts`, and the page's inline script). Fonts are files of the web bundle (`.woff2`, `font/woff2`).
 - **Markdown in Elanor's components** (`src/web/ElanorMarkdown.tsx`): `Markdown.tsx` renders through a component map
   (`MarkdownComponents`, `MarkdownComponentsContext`; `{}` renders plain elements), Elanor's by default: `Prose` with
-  its flow spacing, `Text`, `Heading` (serif), `List`, `Link`, `Table`, `CodeSnippet` with Copy, a read-only
-  `Checkbox` for task items. p2's parser, its safety (raw HTML as text) and its streaming are unchanged; the streaming
-  dot and a marker's spacing are in `elanor-markdown.css`.
+  its flow spacing, `Text`, `Heading`, `List`, `Link`, `Table`, `CodeSnippet` with Copy, a read-only `Checkbox` for
+  task items. p2's parser, its safety (raw HTML as text) and its streaming are unchanged. `elanor-markdown.css` sets
+  the font family to the interface's sans (`--sans`) instead of the pi brand's prose serif, keeping Elanor's sizes and
+  code font; the streaming dot and a marker's spacing are there too.
 - **Service worker** (`public/sw.js`, served at `/sw.js` with `no-cache`): the app starts without the network once it
   was opened. App pages come from the network first and fall back to the last app page kept (on failure, or after 3
   seconds); the web bundle's content-named files come from the cache first (the newest two bundle versions are kept);
@@ -899,15 +934,22 @@ translated phone drawer and intercept chat taps.
   `session-actions` slot in the chat top bar, held in the navigation stack; Back closes it and reload restores it.
   `test/p2/sharing.test.ts` covers guests over WebSocket; `ui-drawer.test.ts` a read-only guest page behind HTTPS.
 - **Files** (`plugins/files`): `POST /upload?session=&name=` (owner or read/write guest of the session; exact
-  same-origin `Origin`; 25 MiB; stored in `<data>/uploads/<session>/`, never in the project) returns an attachment;
-  `Chat.send({ attachments: [ids] })` resolves IDs through the worker's `Attachments` local (only files of that
-  session), and the message lists their paths, with images inline when the model accepts them. `DownloadStore`
-  (server local) saves immutable snapshots for producers (send_file); `GET|HEAD
-  /download?session=&id=` serves them to the owner and the session's guests (no `Sec-Fetch-Site: cross-site`;
-  ranges for audio/video). Owns local `Uploads`, `Downloads` and `filePreview` implementations. Web: the composer's
-  attach button, drag/drop and pasted images upload files at send time, including a new session's first prompt. A
-  paste with plain text stays a text paste (Office apps add a picture of the copied text, Chrome on macOS a Finder
-  file's icon); a paste with only images attaches them.
+  same-origin `Origin`; 25 MiB) streams into the session's `Files` (space `uploads`, path `<id>-<name>`, key the
+  upload's UUID, `source` `owner` or `guest:<id>`) through the worker's `SessionFiles` (server only, chunked; a failed
+  upload is cancelled) and answers `{ id, name, size, mimeType? }`. `Chat.send({ attachments: [ids] })` resolves IDs
+  through the worker's `Attachments` local (only uploads of that session): each is materialized before admission into
+  the data directory's `uploads/<session>/` on this machine (for the default data directory that is
+  `~/.pi/p2/uploads/<session>/`) and, when the receiving conversation works on another environment, into
+  `~/.pi/p2/uploads/<session>/` there; the message lists those paths, with images inline (from this machine's copy)
+  when the model accepts them. `DownloadStore` (server local) snapshots a server file into the session's files;
+  producers on the worker (send_file) write there directly (space `downloads`, key the snapshot's UUID). `GET|HEAD
+  /download?session=&id=` serves them through `SessionFiles` to the owner and the session's guests (no
+  `Sec-Fetch-Site: cross-site`; ranges for audio/video). An archived or unknown session's downloads and artifacts
+  answer 404 at once, and an upload to an archived session 409 (its worker would never start; the routes check the
+  catalog before they reach it), until it is restored. Web: the composer's attach button, drag/drop and pasted images
+  upload files at send time, including a new session's first prompt. A paste with plain text stays a text paste
+  (Office apps add a picture of the copied text, Chrome on macOS a Finder file's icon); a paste with only images
+  attaches them.
 - **File index** (`plugins/file-index`): `FileIndex({ session, conversation })` (participants, as `Workspace`) answers
   `@` completion (`complete`, ranked like pi's `@`) and Tab completion (`list`, one directory) for the TUI and the web
   composer. A worker-local cache per conversation (`FileIndexCache`) builds from `WorkspaceBackend`'s `files` query
@@ -1014,8 +1056,8 @@ translated phone drawer and intercept chat taps.
   (`api.memo`). Server: `AgentTerminals` (worker variant only) serves the session's running current generation (as
   MCP's `currentWorker`), refuses archived sessions, opens only on environments the session works on (its own, its
   subagents'), forwards cancellation. The agent may have 8 running terminals per session (the owner's do not count).
-  Web: the transcript card (code mode off) shows the command line and output with "Open terminal N"; code mode's
-  nested-call rows show the command line. TUI: a card with the command line and the output's last lines.
+  Web: the step's detail in the turn's activity sheet (code mode off) shows the command line and output with "Open
+  terminal N"; code mode's calls show the command line. TUI: a card with the command line and the output's last lines.
   `terminals-host.test.ts` covers shells, disconnect snapshots, foreground jobs, themes and flood resync;
   `terminals.test.ts` covers guest/control denial, one-use byte grants, session isolation, reload and server restart;
   `terminal-agent-host.test.ts` the host's calls (keys done once, cursor, waits, cancel, plain text, the alternate
@@ -1084,12 +1126,13 @@ translated phone drawer and intercept chat taps.
   the shared modal with scroll memory (Escape and the scrim close the whole modal stack). Shell-level
   `workspace-panel` docks beside `main`; `workspace-terminal` is an optional terminals-plugin surface.
 - **send_file** (`plugins/send-file`): owns its native tool, reading through the conversation's
-  execution environment and saving immutable private snapshots into the files plugin's download store directory.
+  execution environment and saving immutable snapshots into the session's files (space `downloads`, `source: "agent"`).
   Directory sources and files over 25 MiB fail. The existing authorized `/download` route serves snapshots even
   after source deletion or plugin reload. `test/p2/send-file.test.ts` and the files integration tests cover it.
   The artifacts plugin supplies the shared viewer.
-- **Artifacts and viewer** (`plugins/artifacts`): owns its native artifact tool and immutable version
-  storage (2 MiB UTF-8). `ArtifactList` follows the conversation's latest-only `ArtifactDoc`, independently of
+- **Artifacts and viewer** (`plugins/artifacts`): owns its native artifact tool; versions live in the session's
+  files (space `artifacts`, path = the name, Files versions = artifact versions, never reused; title and type in
+  `meta`; 2 MiB UTF-8). The `/artifact` route reads through the worker's `ArtifactSource` (server only). `ArtifactList` follows the conversation's latest-only `ArtifactDoc`, independently of
   transcript paging, compaction and reset, and validates the conversation during activation. `/artifact?session=&name=&version=` rechecks authorization for owner/guest, rejects cross-site reads,
   and serves the preview with a CSP sandbox (no same-origin privilege, forms, child frames or objects). Only
   previews receive the diagnostics bridge; `download=1` returns the original source. HEAD describes the same
@@ -1100,8 +1143,8 @@ translated phone drawer and intercept chat taps.
   sent files use the conservative file preview. Nothing opens from a server update. `test/p2/artifacts.test.ts`
   covers fake-provider publication, versions, independent index, reload/restart, CSP, HEAD, guest isolation and
   byte limits; `ui-viewers-search.test.ts` the picker and viewers.
-- **Inline artifacts** (`artifact` tool, `inline: true`): the call's version also renders at its tool call site,
-  below the card, so agents can show diagrams (e.g. SVG sequence diagrams) and small visual results in the chat
+- **Inline artifacts** (`artifact` tool, `inline: true`): the call's version also renders in the chat, below its
+  card in the turn's results, so agents can show diagrams (e.g. SVG sequence diagrams) and small visual results in the chat
   instead of ASCII. `inline` travels only in the result's details (`ArtifactDetails`, `{ ...info, inline: true }`);
   the index, the stored version and every Chord contract are unchanged, so no contract version moved. The web
   (`InlineArtifact` in `plugins/artifacts/preview.tsx`, provided to `Chat.tsx` through `InlineArtifactView`) renders
@@ -1323,15 +1366,47 @@ translated phone drawer and intercept chat taps.
   defaults (`inlineBudget` 3000, `models` on, no namespaces). p2 lists tools only from the subagents' fixed coding-tool
   set, so internal tools never appear; nested-call rows show them by their script name (`models.classify`).
   `codemode-setting.test.ts` toggles it live; `durable-registry.test.ts` covers switches.
-- **Code mode card** (copied from Pi Mobile, `src/web/transcript.ts`, `Chat.tsx`, `icons.tsx`, `style.css`): the
-  `codemode` card shows `<>` Code with the script's first line; its body the script (highlighted JS, clipped to six
-  lines with Show all) and the output. `ToolView.calls` is the one source of nested-call rows: live from
-  `pi.live.nestedTools` (grouped by the model-issued call, depth from the `parentCallId` chain), settled from the
-  result's `details.calls` (Durable's `CodemodeToolDetails`). Rows show status, name, one-line arguments, duration and
-  error or last output line; the newest eight while running, collapsed to "N tool calls · k failed" once settled.
-  The TUI (`src/tui/messages.ts`) shows the first script line and indented rows (summary once settled, all with
+- **Code mode's calls** (copied from Pi Mobile, `src/web/transcript.ts`): `ToolView.calls` is the one source of
+  nested-call rows: live from `pi.live.nestedTools` (grouped by the model-issued call, depth from the `parentCallId`
+  chain), settled from the result's `details.calls` (Durable's `CodemodeToolDetails`). On the web the script is a step
+  of its turn's activity (below): "Ran a script · N calls, k failed" with the script's first comment; its detail shows
+  the script (highlighted JS, Show all past twelve lines), its calls as a timeline (repeated identical calls in a row
+  merged, "×N runs"; a call's own calls marked "nested") and the output; a call opens its input and output, a one-shot
+  agent's call its conversation. The TUI (`src/tui/messages.ts`) shows the first script line and indented rows (summary once settled, all with
   Ctrl+O) until the TUI port replaces it. `codemode-card.test.ts` covers grouping/depth, the details mapping, the TUI
-  and the browser card (fixture `test/fixtures/codemode-card.ts`).
+  and the browser (fixture `test/fixtures/codemode-card.ts`).
+- **Tool calls in the chat: a turn's activity** (ported from the p2-elanor branch's redesign, `src/web/activity/`).
+  The agent's responses between two people's messages (or markers, failures, gaps) are one turn (`chatItems` in
+  `model.ts`): its **activity row**, its **answer** (the turn's last text, with Copy, Branch and Reply; a stop, an
+  error or the length limit below it) and its **results** (artifact and sent-file cards, an inline artifact below its
+  card, an opened port's links). The activity row is a wheel of the turn's steps (thinking, the agent's notes between
+  calls, each tool call): while the agent works the newest step faces the reader in the present tense ("Running npm
+  test") and breathes, a failed one is red, and the turn's time counts; when it ends the wheel rolls to a summary
+  ("Thought, read 3 files, ran 2 commands · 6 steps") and the total time. The reader can roll it back (drag, mouse
+  wheel, arrow keys); a tap opens the **steps**: on a phone a bottom sheet (drag down to close) with a stack of pages,
+  the turn's timeline (opened at its end, on the newest steps), then a step's detail (Input, Output: the command and its output as a terminal, a read's
+  numbered lines or image, an edit's diff, a subagent's message and answer with Open, a history tool's entries that
+  reveal their messages), then one of a script's calls; Back or a swipe right goes back. From 900px the steps open
+  in a panel at the right instead (the workspace's place: opening one closes the other; over the chat until 1280px,
+  docked beside it from there; `AppLayout`'s `#side-dock`), one turn at a time (`panel.ts`), pages crossfading. The
+  last turn is live while the transcript says the agent works (`working`), or, before the live view arrived (the
+  copy kept on the device), while its entries say it is not over. The old per-call cards, the thinking row and the
+  working dots are gone. The wheel, the timeline and the page stack are Elanor's `Ticker`, `Timeline` and
+  `Drawer.Stack`/`Drawer.Page` (with a bottom sheet's rubber-band drag to close), which Elanor's npm release 0.1.0
+  does not have yet: p2 builds them in `src/web/elanor-extra/` (ported from Elanor's source as the branch vendored it,
+  styles in Elanor's layer) until Elanor ships them; the activity's icons are Elanor's Material Symbols
+  (`@earendil-works/elanor-icons-react`). The activity uses the interface's sans: it sets Elanor's ui typography
+  tokens anew with `--sans` (`activity.css`). The transcript and the composer are at most Elanor's width for running
+  text (52rem). Branch-only parts left out: the "files changed" card (needs worker support) and the lab's result
+  rows and cards. Tests: `activity-model.test.ts` (turns, labels, summaries, grouped calls), `activity-panel.test.ts`
+  (docked beside the chat, swapping with the workspace), and the browser tests that open steps (`codemode-card`,
+  `nested-calls`, `ui-agents`, `failed-turns`, `ui-mobile-fixes`).
+- **Earlier history while a turn is one row:** a page of a turn's tool calls can add next to no height (they are all
+  one activity row), so the transcript loads earlier pages by itself while following the answer at the bottom and
+  less than a viewport of history is above it, not only on a scroll up (`#loadEarlier` in `use-chat-scroll.ts`), and
+  asks again after a page that grew the loaded history (`history.size`, the transcript's item count), not only after
+  one that added rows. Before, a long turn could leave only its row under "Earlier messages", with nothing to scroll.
+  `ui-mobile-fixes.test.ts` covers it.
 - **Security limits (as Pi Mobile):** for static UI requests, guests may load their session's pages, the installable
   app's `public/` files, the bundle manifest and files from the current or briefly retained bundle generations
   (`src/hosts/web.ts`); other web-host paths are 403. Authorized plugin routes retain their own guest permissions.
