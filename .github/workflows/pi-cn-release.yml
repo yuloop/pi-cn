@@ -1,8 +1,8 @@
 name: Pi Chinese Release
 
 # pi（earendil-works/pi）汉化版【正式版】自动构建发布流水线
-# 每小时检查上游最新正式 Release：有新正式版则同步 → 校验翻译词表 100% 匹配 → 应用汉化 → 构建 → 发布 v<上游版本>-cn Release
-# 实时更新版见 pi-cn-nightly.yml（跟随上游 main 每小时构建）
+# 定时（每天 2 次）检查上游最新正式 Release：有新正式版则同步 → 校验翻译词表 100% 匹配 → 应用汉化 → 构建 → 发布 v<上游版本>-cn Release
+# 实时更新版见 pi-cn-nightly.yml（跟随上游 main，每天 2 次定时构建）
 
 on:
   schedule:
