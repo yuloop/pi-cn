@@ -1,3 +1,6 @@
+> **本仓库是 pi 的简体中文汉化版（`yuloop/pi-cn`）**：源码上游是 [`earendil-works/pi`](https://github.com/earendil-works/pi)，本仓库自动同步并注入翻译词表后构建。
+> 汉化版的安装方式、翻译词表与构建流水线见 [`pi-i18n/README.md`](pi-i18n/README.md)；下方为上游原始英文说明。
+
 <p align="center">
   <a href="https://pi.dev">
     <img alt="pi logo" src="https://pi.dev/logo-auto.svg" width="128">
