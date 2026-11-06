@@ -2,13 +2,24 @@
 
 [earendil-works/pi](https://github.com/earendil-works/pi)（AI 编码智能体，TypeScript monorepo，含 TUI 终端界面与 coding-agent CLI）的社区汉化构建。
 
-本仓库（`yuloop/pi-cn`，独立仓库，每小时从上游 `main` 合并）维护：
+本仓库（`yuloop/pi-cn`，独立仓库，每天 3 次从上游 `main` 合并）维护：
 
 - `pi-i18n/translations/` — 翻译词表（按源码模块拆分的 JSON，格式 `{"file": ..., "replacements": {"英文原文": "中文译文"}}`）
 - `pi-i18n/apply_translations.py` — 翻译应用/校验工具（Python 3 标准库，无第三方依赖）
-- `.github/workflows/pi-cn-release.yml` — 自动汉化构建发布流水线：每小时同步上游 `main` → 校验词表 100% 匹配 → 应用翻译 → 构建 → 发布 `<上游版本>-cn` Release
+- `.github/workflows/pi-cn-release.yml` — 自动汉化构建发布流水线：定时同步上游 `main` → 校验词表 100% 匹配 → 应用翻译 → 构建 → 发布 `<上游版本>-cn` Release
 
-汉化版与上游同步机制：流水线每小时检查上游 `earendil-works/pi` 的 `main` 分支是否有新提交；只有新提交时才会拉取、汉化、构建并发布。若上游无新变化则跳过（不产生空 Release）。
+汉化版与上游同步机制：流水线定时检查上游 `earendil-works/pi` 的 `main` 分支是否有新提交；只有新提交时才会拉取、汉化、构建并发布。若上游无新变化则跳过（不产生空 Release）。
+
+定时频率（UTC，括号内为北京时间）：
+
+| 流水线 | cron | 频率 |
+|---|---|---|
+| `pi-cn-sync.yml`（合并上游 main） | `23 0,8,16 * * *` | 每天 3 次（08:23 / 16:23 / 00:23） |
+| `pi-cn-nightly.yml`（实时预览版构建） | `51 4,16 * * *` | 每天 2 次（12:51 / 00:51） |
+| `pi-cn-release.yml`（跟随上游正式 Release） | `3 2,15 * * *` | 每天 2 次（10:03 / 23:03） |
+| `npm-audit.yml`（依赖审计） | `37 11 * * *` | 每天 1 次（19:37） |
+
+同一槽位若已有一轮跑过（含人工/兜底补跑），后到的定时运行会被 workflow 内的 `slot-guard` 自动取消，不会重复构建。
 
 ## 汉化版安装
 
