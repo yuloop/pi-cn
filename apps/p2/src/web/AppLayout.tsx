@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { closeLayers, Slot, useCanWrite, useDrawer, useRoute } from "../runtime/web.tsx";
+import { closeLayers, Slot, useCanWrite, useDrawer, useRoute, useUnshownLayers } from "../runtime/web.tsx";
 import { useComposerState } from "./composer-state.tsx";
 import { useDrawerSwipe } from "./drawer-swipe.ts";
 import { OwnerNotices } from "./OwnerNotices.tsx";
@@ -14,6 +14,7 @@ export function AppLayout() {
 	const [draggingFiles, setDraggingFiles] = useState(false);
 	const dragDepth = useRef(0);
 	const swipe = useDrawerSwipe();
+	useUnshownLayers();
 	return (
 		<div className={`app ${drawer ? "drawer-open" : ""} ${collapsed ? "sidebar-collapsed" : ""}`}>
 			<aside className="drawer" ref={swipe.drawer}>
@@ -61,8 +62,6 @@ export function AppLayout() {
 				<Slot name="main" fallback={<div className="hero">No chat plugin</div>} />
 			</main>
 			<Slot name="workspace-panel" />
-			{/* A turn's steps, docked at the right on a wide screen (activity/Sheet.tsx renders into it). */}
-			<div className="side-dock" id="side-dock" data-testid="side-dock" />
 		</div>
 	);
 }

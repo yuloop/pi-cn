@@ -27,9 +27,9 @@ P2_FAKE=1 npm start          # http://127.0.0.1:8788, data in ~/.pi/p2
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `P2_DATA_DIR` | `~/.pi/p2` | data directory: `catalog.sqlite`, `server/` and `sessions/<id>/` (see **Host stores and files**), `settings.json`, `models.json`, `envs.json`, `mcp.json`, `mcp-auth.json`, `auth.json`, `radius.json`, `forwards.json` |
+| `P2_DATA_DIR` | `~/.pi/p2` | data directory: `catalog.sqlite`, `server/` and `sessions/<id>/` (see **Host stores and files**), `settings.json`, `models.json`, `envs.json`, `projects.json`, `mcp.json`, `mcp-auth.json`, `auth.json`, `radius.json`, `forwards.json` |
 | `PORT` | `8788` | listen port (loopback only), so p2 never collides with pi-mobile on 8787 |
-| `P2_FAKE` | unset | `1`: the faux provider (`faux/faux-1`, echoes the prompt; `slow …` streams long; `rename-session <title>` calls the tool; `subagent`, `subagent-bad`, `subagent-answer`, `subagent-configure`, `subagent-send`, `subagent-archive`, `subagent-status` exercise subagents, `subagent <json>` calls the tool with those arguments, as do `team <json>`, `history_search|read|handoff <json>`, `location_envs|dirs|move <json>`, `tool_search <json>`, `terminal <json>` and `mcp__<server>__<tool> <json>`; `codemode` runs a script calling bash and read, `codemode-restart` one whose slow middle call a restart interrupts, `codemode <script>` runs that script; `artifact <json>` calls the artifact tool with those arguments; `json <text>` answers exactly `<text>`; a one-shot agent whose task is not `json …`/`slow…` answers a small value matching its schema) |
+| `P2_FAKE` | unset | `1`: the faux provider (`faux/faux-1`, echoes the prompt; `slow …` streams long; `rename-session <title>` calls the tool; `subagent`, `subagent-bad`, `subagent-answer`, `subagent-configure`, `subagent-send`, `subagent-archive`, `subagent-status` exercise subagents, `subagent <json>` calls the tool with those arguments, as do `team <json>`, `history_search|read|handoff <json>`, `location_envs|dirs|move <json>`, `tool_search <json>`, `terminal <json>` and `mcp__<server>__<tool> <json>`; `codemode` runs a script calling bash and read, `codemode-restart` one whose slow middle call a restart interrupts, `codemode <script>` runs that script; `artifact <json>` calls the artifact tool with those arguments; `steps` makes a turn of thinking, calls and words, `inline-steps` one with an inline artifact between two calls; `json <text>` answers exactly `<text>`; a one-shot agent whose task is not `json …`/`slow…` answers a small value matching its schema) |
 | `P2_IDLE_MS` | `300000` | idle time before a session worker stops |
 | `P2_PROVIDER`, `P2_MODEL` | unset | default model for new sessions after settings.json's `defaultModel` (both or neither; Pi Mobile's `PI_MOBILE_PROVIDER`/`PI_MOBILE_MODEL` work too) |
 | `P2_RADIUS` | unset | `0`: disable the outbound Radius brain connection even when signed in |
@@ -227,10 +227,11 @@ the terminal: the stack (frames name `p2-tui-bundle.mjs`), controls removed, at 
 and class names for this); a heap overrun says so instead. Rendering is copied from coding-agent's interactive mode and DurableTui (p2-tui-port.md P0c/P2;
 p2 imports neither coding-agent nor mobile): a fullscreen layout (transcript `ScrollView` over a dock of status lines,
 pending area, pi's editor with the working indicator in its border, and pi's footer), incremental transcript
-components keyed by the shared display items (`src/tui/components/`), pi's tool cards and renderers for bash, read,
-write, edit (the result's diff), grep/find/ls and code mode (`src/tui/tools/`), and plugin contributions through
-`TuiToolRenderers`, `TuiToolRendererResolvers`, `TuiEntryRenderers` and `TuiMarkdownTransformers`
-(`src/runtime/tui-renderers.ts`). Drafts, pending send IDs and reading positions are kept per viewed
+components keyed by the shared display items (`src/tui/components/`), pi's tool card (`src/tui/components/
+tool-execution.ts`, pi's generic card for a tool without renderers, the shared shell card in `src/tui/tools/shell.ts`),
+and plugin contributions through `TuiToolRenderers` (the tools' own cards, from the plugins that own them: bash, read,
+write, edit (the result's diff), grep/find/ls in `coding-tools`, `powershell`, code mode in `codemode`),
+`TuiToolRendererResolvers`, `TuiEntryRenderers` and `TuiMarkdownTransformers` (`src/runtime/tui-renderers.ts`). Drafts, pending send IDs and reading positions are kept per viewed
 (session, conversation); the reading position stays put while output grows or older history is prepended.
 
 pi's defaults (rebindable in pi's `keybindings.json` or p2 prefs; `/hotkeys` lists all with conflicts):
@@ -753,6 +754,44 @@ translated phone drawer and intercept chat taps.
     one connection each and closing only unused machines), `harness-cwd.test.ts` (version 1 registry placement),
     `envs.test.ts` (local to SSH and back in place, an own local location staying while the session moves to SSH,
     real sshd).
+- **Projects** (`plugins/projects`, owner, TUI only so far): `projects.json` names a codebase's places, one per
+  environment (README, Configuration). The server observes it as envs.json is observed (`ProjectService`: one observer,
+  the last valid projects and the reason the last read failed); `Projects` serves them to owners with `local`, the
+  server's hostname, which the TUI writes for this device.
+  - **Membership** is explicit, never derived from a path: `ProjectService` keeps session ID → project name in a
+    persisted document of the server's Chord store (`p2.project-sessions`), not in the session catalog, so the
+    catalog's schema and the `Sessions`/`Catalog` contracts stay as they are and dropping the plugin leaves only an
+    unused document. Written by `Projects.assign` (the TUI's project rows, before `Sessions.create`, refused for a name
+    projects.json lacks) and by copies: the sessions plugin's `SessionCopied` registry (called once a clone's or fork's
+    row exists) gives the copy its source's project. Nothing clears it; archived sessions keep theirs; a project removed
+    from projects.json leaves its name on its sessions.
+  - **Selector:** with an empty search (owner, active sessions, at least one project) the list is grouped: each project
+    row, its sessions below it, then "Other" ("+ New session" and the sessions of no project or of a removed one, the
+    latter dimmed with the old name). Within a group the order is the sort's (pinned first, then newest; relevance
+    equals recent without a query) and the threaded sort nests subagent conversations; rows show their env:cwd. The
+    grouped list has no scope (every session, Tab does nothing, no scope in the header or hints, owner decision); flat
+    lists (a search, archived sessions, guests, no projects) keep Tab's current-folder/all scope as before, except that
+    a search typed in the grouped list starts in "all" (that list showed every session).
+  - **Places** are never resolved on the server: the sessions TUI resolves them with `Envs.listDirectory` (which
+    expands `~` there and fails when the machine is unreachable). The project rows probe every place each time the
+    selector is shown (picks made with left/right reset then). A failed probe is classified from the error's message,
+    the only part that crosses the link (`placeFailure`): Node's and the pi-env daemon's `ENOENT`/`ENOTDIR` and the SSH
+    manager's "Working directory is not a directory" are `?` (no folder), "Environment … is not configured" is `✗`
+    "no such environment", anything else `✗` with its message; the selected row shows these reasons on a line below
+    it. Only `✓` places are used: Enter waits for the places in preference order and creates the session at the first
+    reachable one's absolute path.
+  - **`/move`** without an argument opens a picker (the `/envs` list overlay, `ListOverlay`) of all the project's
+    places in projects.json's order: the session's own one marked `•` current (not probed), the others probed when it
+    opens with the rows' marks and reasons. The cursor starts on the first other place not known to be unusable and
+    moves on as probes answer, until one is reachable or the reader moves it (`ListOverlay.select`). Enter on a `✓`
+    place runs `/move <it>`, on the current one says "Already here" and closes, other places are refused with a note;
+    Escape cancels. No project or no other place: the same errors, no picker.
+  - **`/move <env>`** takes the session's stored project (an error without one, or when projects.json no longer has
+    it) and its place on `<env>`, resolved there. The subfolder is kept when the cwd is below the project's place on
+    the session's current machine (`below`, textual, so that machine may be unreachable: `~/rel` matches `/rel` at
+    segment boundaries after a non-empty home, `~` matches everything with no subpath) and the target has it, else the
+    move goes to the target's root (with a notice when the subfolder is missing there). Then `/cd`'s flow (its
+    confirmation, `Sessions.relocate`). Tests: `projects.test.ts`, `tui-projects.test.ts`.
 - **Principals** (`src/runtime/principals.ts`, typed: `P2Principal`, with Chord's API typed by it in
   `src/runtime/chord.ts`): `owner` (trusted loopback `access: "local"`, authenticated Radius `access: "relay"`, or a
   signed owner cookie `access: "device"` with a device ID), `guest`, `worker` (stamped by the server's `session:` route
@@ -1366,41 +1405,95 @@ translated phone drawer and intercept chat taps.
   defaults (`inlineBudget` 3000, `models` on, no namespaces). p2 lists tools only from the subagents' fixed coding-tool
   set, so internal tools never appear; nested-call rows show them by their script name (`models.classify`).
   `codemode-setting.test.ts` toggles it live; `durable-registry.test.ts` covers switches.
-- **Code mode's calls** (copied from Pi Mobile, `src/web/transcript.ts`): `ToolView.calls` is the one source of
-  nested-call rows: live from `pi.live.nestedTools` (grouped by the model-issued call, depth from the `parentCallId`
-  chain), settled from the result's `details.calls` (Durable's `CodemodeToolDetails`). On the web the script is a step
-  of its turn's activity (below): "Ran a script · N calls, k failed" with the script's first comment; its detail shows
-  the script (highlighted JS, Show all past twelve lines), its calls as a timeline (repeated identical calls in a row
-  merged, "×N runs"; a call's own calls marked "nested") and the output; a call opens its input and output, a one-shot
-  agent's call its conversation. The TUI (`src/tui/messages.ts`) shows the first script line and indented rows (summary once settled, all with
-  Ctrl+O) until the TUI port replaces it. `codemode-card.test.ts` covers grouping/depth, the details mapping, the TUI
-  and the browser (fixture `test/fixtures/codemode-card.ts`).
-- **Tool calls in the chat: a turn's activity** (ported from the p2-elanor branch's redesign, `src/web/activity/`).
-  The agent's responses between two people's messages (or markers, failures, gaps) are one turn (`chatItems` in
-  `model.ts`): its **activity row**, its **answer** (the turn's last text, with Copy, Branch and Reply; a stop, an
-  error or the length limit below it) and its **results** (artifact and sent-file cards, an inline artifact below its
-  card, an opened port's links). The activity row is a wheel of the turn's steps (thinking, the agent's notes between
-  calls, each tool call): while the agent works the newest step faces the reader in the present tense ("Running npm
-  test") and breathes, a failed one is red, and the turn's time counts; when it ends the wheel rolls to a summary
-  ("Thought, read 3 files, ran 2 commands · 6 steps") and the total time. The reader can roll it back (drag, mouse
-  wheel, arrow keys); a tap opens the **steps**: on a phone a bottom sheet (drag down to close) with a stack of pages,
-  the turn's timeline (opened at its end, on the newest steps), then a step's detail (Input, Output: the command and its output as a terminal, a read's
-  numbered lines or image, an edit's diff, a subagent's message and answer with Open, a history tool's entries that
-  reveal their messages), then one of a script's calls; Back or a swipe right goes back. From 900px the steps open
-  in a panel at the right instead (the workspace's place: opening one closes the other; over the chat until 1280px,
-  docked beside it from there; `AppLayout`'s `#side-dock`), one turn at a time (`panel.ts`), pages crossfading. The
-  last turn is live while the transcript says the agent works (`working`), or, before the live view arrived (the
-  copy kept on the device), while its entries say it is not over. The old per-call cards, the thinking row and the
-  working dots are gone. The wheel, the timeline and the page stack are Elanor's `Ticker`, `Timeline` and
-  `Drawer.Stack`/`Drawer.Page` (with a bottom sheet's rubber-band drag to close), which Elanor's npm release 0.1.0
-  does not have yet: p2 builds them in `src/web/elanor-extra/` (ported from Elanor's source as the branch vendored it,
-  styles in Elanor's layer) until Elanor ships them; the activity's icons are Elanor's Material Symbols
-  (`@earendil-works/elanor-icons-react`). The activity uses the interface's sans: it sets Elanor's ui typography
-  tokens anew with `--sans` (`activity.css`). The transcript and the composer are at most Elanor's width for running
-  text (52rem). Branch-only parts left out: the "files changed" card (needs worker support) and the lab's result
-  rows and cards. Tests: `activity-model.test.ts` (turns, labels, summaries, grouped calls), `activity-panel.test.ts`
-  (docked beside the chat, swapping with the workspace), and the browser tests that open steps (`codemode-card`,
-  `nested-calls`, `ui-agents`, `failed-turns`, `ui-mobile-fixes`).
+- **Code mode's calls** (copied from Pi Mobile): the core knows nested calls only as Durable shows them
+  (`ToolView.calls` in `src/web/transcript.ts`: live from `pi.live.nestedTools`, grouped by the model-issued call,
+  depth from the `parentCallId` chain, then the last list this browser saw). Code mode's contributions read the rest
+  (`plugins/codemode/nested.ts`, `nestedCalls` in `ToolActivity` and the TUI's `ToolRenderers`): settled from the
+  result's `details.calls` (Durable's `CodemodeToolDetails`), live ones of internal tools by their script name. On the
+  web the script is a step of its turn's activity (below): "Ran a script · N calls, k failed" with the script's first
+  comment; its detail shows the script (highlighted JS, Show all past twelve lines), its calls as a timeline (repeated
+  identical calls in a row merged, "N runs, k failed" from code mode's `repeated`; a call's own calls marked "nested")
+  and the output; a call opens its input (a command line for bash, PowerShell and the terminal: their `CallInput`) and
+  output, a one-shot agent's call its conversation. The TUI card (`plugins/codemode/card.ts`) shows the script and the
+  newest eight calls by depth, all with Ctrl+O. `codemode-card.test.ts` covers grouping/depth, the details mapping, the
+  TUI and the browser (fixture `test/fixtures/codemode-card.ts`).
+- **Tool calls in the chat: a run's activity** (ported from the p2-elanor branch's redesign, `src/web/activity/`;
+  reshaped by owner decisions after it). The agent's responses between two people's messages (or markers, failures,
+  gaps) are one turn (`chatItems` in `model.ts`). Its thinking blocks and texts stay in the transcript in their order
+  ("Thought ›" opens in place; text as prose); each run of consecutive tool calls between them is one **activity row**;
+  the turn's last text is its **answer** (Copy, Branch and Reply; a stop, an error or the length limit below it),
+  followed by its **results** (artifact and sent-file cards, an inline artifact below its card, an opened port's links).
+  The activity row is a wheel of the run's calls: while the agent works the newest call faces the reader in the present
+  tense ("Running npm test") and breathes, a failed one is red, and the run's time counts (until the next response
+  begins); when it ends the wheel rolls to a summary ("Read 3 files, ran 2 commands · 6 steps") and the total time. The
+  reader can roll it back (drag, mouse wheel, arrow keys); a tap opens the run's calls in **p2's own sheet** (the
+  runtime's `Sheet`: grip, 52px header with "N steps · 18s" and Close, swipe down to close; a centred dialog from
+  700px) as a route layer (`openActivity`, layer `{ kind: "sheet", name: "activity", locator }` with the row's key):
+  one 44px row per call (icon, tool name and main argument, ✓ with its time, ✗ with an exit code, ● running,
+  chevron); a row opens the call's detail one layer up (Input, Output: the command and its output as a terminal, a
+  read's numbered lines or image, an edit's diff, a subagent's message and answer with Open, a history tool's entries
+  that reveal their messages), with Back in the header, and a script's call one more. Back (the browser's, Android's,
+  the header's) leads down a layer at a time and finally closes the sheet, like every other sheet; the wheel rolled to
+  a call opens the list and that call's detail over it. The transcript renders the sheet (`ActivityLayer` in
+  `Messages`), so it follows a running run live. The last run is live while the transcript says the agent works
+  (`working`), or, before the live view arrived (the copy kept on the device), while its entries say it is not over.
+  Before the first response a waiting wheel ("Working…") stands for the run. The wheel and a script's timeline are
+  Elanor's `Ticker` and `Timeline`, which Elanor's npm release 0.1.0 does not have yet: p2 builds them in
+  `src/web/elanor-extra/` (ported from Elanor's source as the branch vendored it, styles in Elanor's layer) until
+  Elanor ships them (its `Drawer` page stack there is no longer used); the wheel's icons are Elanor's Material Symbols
+  (`@earendil-works/elanor-icons-react`), the sheet's p2's own. The activity uses the interface's sans: it sets
+  Elanor's ui typography tokens anew with `--sans` (`activity.css`). The transcript and the composer are at most
+  Elanor's width for running text (52rem). Owner decision: no docked side panel on wide screens (the branch's
+  `#side-dock`); the sheet is the same at every width. Branch-only parts left out: the "files changed" card (needs
+  worker support) and the lab's result rows and cards. Tests: `activity-model.test.ts` (parts in order, runs, labels,
+  summaries, grouped calls), `ui-activity.test.ts` (the sheet, its layers and Back, the wide dialog, a mixed turn, a
+  long run opening at its end), and the browser tests that open steps (`codemode-card`, `nested-calls`, `ui-agents`,
+  `failed-turns`, `ui-mobile-fixes`).
+- **How much of a turn shows: settings.json `detail`** (owner decision: a level in settings.json for now, no app UI;
+  read live from the owner's `Models` resources snapshot, so guests see the default). 1: only the answer and its
+  results; the turn's thinking, texts and calls on one wheel per turn (keyed by the item before the run, like the
+  waiting wheel), its sheet listing thinking and texts among the calls ("Thought", "Note", each opening its words). The
+  turn's last text becomes its answer only once the agent stopped: while it works a text may still turn out to be a
+  note (a call follows), so it stays on the wheel, and the answer arrives in the transcript once, fading in as new rows
+  do, instead of showing and then jumping back onto the wheel.
+  2 (default, owner decision after trying it): the agent's texts in the transcript; thinking and calls on a wheel
+  between them. 3: as above, thinking collapsed and only runs of calls on wheels. 4: thinking open in full and each call its own row (the sheet's row:
+  icon, tool and argument, state), opening its detail alone; no wheels (a waiting wheel still stands for a run before
+  its first call). `chatItems`' `detail` merges what goes on the wheels into the runs of calls (`wheels` in `model.ts`,
+  `WheelEntry`); the summary of a wheel with thinking leads with "Thought". A result its tool shows in place (an
+  inline artifact, `hasResult` "inline") stays in place at 2, 3 and 4 (between wheels, or after its call's row at 4;
+  the wheel after it is the row that waited there); at 1 it joins the results after the answer, drawn in full, so the
+  turn keeps its one wheel. `activity-model.test.ts` covers the levels, `ui-detail.test.ts` the transcript and the
+  sheet as the setting changes live, and the answer arriving once.
+- **Tools' look comes from their plugins** (owner decision: no tool-specific code in `src/web`). A plugin's web facet
+  contributes `ToolActivity` entries, keyed by tool name, to the `ToolActivities` registry (`src/runtime/web-core.ts`;
+  type in `src/web/activity/model.ts`, the parts a detail is built from in `src/web/activity/api.ts`, all through
+  `@p2/app/v1/web`): its words on the wheel and in the sheet (`describe`, `running`: a `Kind` from the activity's icon
+  vocabulary, a verb, an object, an extra), the row's main argument, a failure word ("exit 1"), its words in a run's
+  summary as a function of the count (tools sharing the function count together: write and edit), its `Detail`, the
+  calls it made (`nestedCalls`) and how it words repeats of them (`repeated`), a nested call's `CallInput` and
+  `CallDetail`, and a `Result` with `hasResult` saying where: after the answer, or inline, right after its call (an
+  artifact with `inline: true`; the run of calls splits around it; at detail 1 after the answer). Writing one:
+  `docs/tool-ui.md`. A detail shows everything at once (no
+  "Show all" inside it; long output scrolls with the sheet) and follows a running call live; the one cap kept is a
+  script's calls: the newest eight, the rest behind "Show all", as the transcript's card had them. Owners: `coding-tools` (bash, read, write, edit), `terminals`, `codemode`, `powershell`,
+  `subagents`, `agent`, `artifacts`, `send-file`, `ports`, `conversations`, `history`, each in its `activity.tsx`. The
+  chat plugin reads the registry and passes the table to `transcriptRows` and `ToolActivityContext`. A tool without a
+  contribution (an MCP tool, `team`) reads as its name and first short string argument with the generic icon ("used
+  web_fetch", "used web_fetch 3 times" in a summary), its detail the input as JSON and the output; PowerShell
+  contributes only its `CallInput`. Tool declarations and schemas carry nothing for this. Tests: `activity-model.test.ts` (contributed and generic words, summaries), `ui-activity.test.ts` (a
+  plugin's detail and the generic one), the fixtures' table (`test/fixtures/transcript.ts`, `PLUGIN_TOOLS`).
+- **Incoming messages** (`Incoming` in `src/web/Chat.tsx`): every message that is neither the owner's nor the agent's
+  own (a subagent's answer, question, note or failure, `p2.agent-message`; another session's, `p2.peer-message`; a
+  guest's input or chat message) has one shape: a header line "icon name · what · time" (answered, asks, wrote,
+  failed, (guest) wrote), muted but the name, and the body as Markdown indented under the name, cut after about eight
+  lines with "Show more". Owner decision: no coloured side edges, no left border lines, no per-kind or per-guest
+  colours; kinds differ only by icon and word. A subagent's header (at least 44px, with a chevron) opens its
+  conversation in this session, another session's header that session (owner only); both are navigation steps, so
+  Back returns. A guest's has no target. The body is never a link. The owner's messages keep the bubble; inputs
+  without an author (a main agent's task in a subagent's conversation) too. Not done: "Answered: …" under an answered
+  subagent question (no data links a `team` question to the main agent's later `subagent send`). Test:
+  `ui-incoming.test.ts`.
 - **Earlier history while a turn is one row:** a page of a turn's tool calls can add next to no height (they are all
   one activity row), so the transcript loads earlier pages by itself while following the answer at the bottom and
   less than a viewport of history is above it, not only on a scroll up (`#loadEarlier` in `use-chat-scroll.ts`), and

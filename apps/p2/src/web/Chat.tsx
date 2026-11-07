@@ -4,17 +4,30 @@ import {
 	createContext,
 	memo,
 	type PointerEvent,
+	type ReactNode,
 	useContext,
 	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
 import { ActivityRow } from "./activity/ActivityRow.tsx";
-import { type ChatItem, chatItems } from "./activity/model.ts";
+import { ActivityLayer } from "./activity/ActivitySheet.tsx";
+import { type ChatItem, chatItems, DEFAULT_DETAIL, type Detail, type ToolActivityTable } from "./activity/model.ts";
 import { Results } from "./activity/Results.tsx";
 import { CopyButton } from "./Code.tsx";
-import { BranchFrom, OpenPeerConversation, ReplyTo, RevealEntry } from "./chat-context.ts";
-import { BotIcon, BranchIcon, ChevronIcon, PencilIcon, ReplyIcon } from "./icons.tsx";
+import { BranchFrom, OpenConversation, OpenPeerConversation, ReplyTo, RevealEntry } from "./chat-context.ts";
+import {
+	AlertIcon,
+	BotIcon,
+	BranchIcon,
+	ChevronIcon,
+	CommentIcon,
+	PencilIcon,
+	ReplyIcon,
+	SparkIcon,
+	UsersIcon,
+} from "./icons.tsx";
 import { imageSize } from "./image-size.ts";
 import { Markdown } from "./Markdown.tsx";
 import { RowEstimator, type RowFeatures } from "./row-estimate.ts";
@@ -76,6 +89,7 @@ export {
 	RevealEntry,
 	relativePath,
 	SessionId,
+	ToolActivityContext,
 	WorkingDirectory,
 } from "./chat-context.ts";
 
@@ -246,15 +260,27 @@ function rowFeatures(row: TranscriptRow, width: number): RowFeatures {
 	switch (item.type) {
 		case "user":
 			return {
-				kind: ["user", item.author || item.peer ? "named" : "", item.images.length ? "images" : "", spacing].join(
-					":",
-				),
+				kind: [
+					incoming(item) ? "incoming" : "user",
+					item.author ? "named" : "",
+					item.images.length ? "images" : "",
+					spacing,
+				].join(":"),
 				text: item.text.length,
 				fixed: imagesHeight(item.images, width),
 			};
 		case "activity":
-			// One line, the wheel, however much the turn did.
-			return { kind: `activity:${spacing}`, text: 0, fixed: 0 };
+			// One line, the wheel, however many calls the run made; at detail 4 a row per call.
+			return item.rows
+				? { kind: `activity:rows:${item.steps.length}:${spacing}`, text: 0, fixed: 0 }
+				: { kind: `activity:${spacing}`, text: 0, fixed: 0 };
+		case "thought":
+			// One line until opened; at detail 4 in full.
+			return item.full
+				? { kind: `thought:full:${spacing}`, text: item.text.length, fixed: 0 }
+				: { kind: `thought:${spacing}`, text: 0, fixed: 0 };
+		case "text":
+			return { kind: `text:${spacing}`, text: item.text.length, fixed: 0 };
 		case "answer":
 			return {
 				kind: [
@@ -282,42 +308,160 @@ function rowFeatures(row: TranscriptRow, width: number): RowFeatures {
  */
 export const rowEstimates = new RowEstimator<TranscriptRow>(rowFeatures, 120);
 
-function Report({ name, status, text }: { name: string; status: string; text: string }) {
-	const [open, setOpen] = useState(false);
-	const failed = status.startsWith("failed");
-	const verb = failed ? "failed" : status === "question" ? "asks" : status === "note" ? "notes" : "answered";
+/** Whether a message is someone else's (a subagent's, another session's, a guest's): `Incoming`, not a bubble. */
+const incoming = (item: Extract<Item, { type: "user" }>): boolean =>
+	Boolean(item.agent || item.peer || item.author?.kind === "guest");
+
+/** A message's time: the clock today, with the date before. */
+function sentAt(at: number): string {
+	const date = new Date(at);
+	const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+	return date.toDateString() === new Date().toDateString()
+		? time
+		: `${date.toLocaleDateString([], { day: "numeric", month: "short" })} ${time}`;
+}
+
+const AGENT_VERBS = { answered: "answered", question: "asks", note: "wrote", failed: "failed" } as const;
+
+/**
+ * Someone else's message, one shape for every kind (owner decision: kinds differ only by icon and word, no coloured
+ * edges): a header line "icon name · what · time", muted but the name, and the body as Markdown indented under the
+ * name, cut after about eight lines with "Show more". The whole header opens where the message came from (a subagent's
+ * conversation, another session) and then shows a chevron; the body is text to select, never a link.
+ */
+function Incoming({ item }: { item: Extract<Item, { type: "user" }> }) {
+	const openConversation = useContext(OpenConversation);
+	const openPeer = useContext(OpenPeerConversation);
+	const reveal = useContext(RevealEntry);
+	const branch = useContext(BranchFrom);
+	const guest = item.author?.kind === "guest" ? item.author : undefined;
+	const reply = useReply(guest ? item.entryId : undefined, guest?.name ?? "");
+	const { agent, peer } = item;
+	const sender: { kind: string; icon: ReactNode; name: string; what: string; open?: () => void } = agent
+		? {
+				kind: "agent",
+				icon: agent.intent === "failed" ? <AlertIcon /> : <BotIcon />,
+				name: agent.from.name,
+				what: AGENT_VERBS[agent.intent],
+				open: () => openConversation(agent.from.conversationId),
+			}
+		: peer
+			? {
+					kind: "session",
+					icon: <CommentIcon />,
+					name: peer.title.trim() || "Conversation",
+					what: "wrote",
+					...(openPeer ? { open: () => openPeer(peer.id) } : {}),
+				}
+			: {
+					kind: "guest",
+					icon: <UsersIcon />,
+					name: guest?.name ?? "",
+					what: item.chat ? "(guest) wrote in chat" : "(guest) wrote",
+				};
+	// Only what reached the agent can be edited, and a subagent's message is the agent's, not a person's.
+	const entryId = item.chat || agent ? undefined : item.entryId;
+	const line = (
+		<>
+			<span className="incoming-icon">{sender.icon}</span>
+			<span className="incoming-line">
+				<span className="incoming-name">{sender.name}</span> · {sender.what}
+				{item.at !== undefined && ` · ${sentAt(item.at)}`}
+			</span>
+		</>
+	);
 	return (
-		<div className={`report ${failed ? "failed" : ""} ${status === "question" ? "question" : ""}`}>
-			<button type="button" className="report-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-				<BotIcon />
-				<span>
-					<strong>{name}</strong> {verb}
-				</span>
-				<span className={`chev ${open ? "open" : ""}`}>
-					<ChevronIcon size={14} />
-				</span>
-			</button>
-			{text && (
-				<div className={open ? "report-body" : "report-body clamp"}>{failed ? text : <Markdown text={text} />}</div>
-			)}
+		<div className="incoming" data-entry={item.entryId} data-from={sender.kind} data-testid="incoming">
+			<div className="incoming-head">
+				{sender.open ? (
+					<button type="button" className="incoming-from" aria-label={`Open ${sender.name}`} onClick={sender.open}>
+						{line}
+						<span className="incoming-chevron" aria-hidden="true">
+							<ChevronIcon />
+						</span>
+					</button>
+				) : (
+					<div className="incoming-from">{line}</div>
+				)}
+				{branch && entryId !== undefined && (
+					<button
+						type="button"
+						className="edit-button"
+						aria-label="Edit"
+						title="Edit: continue the session before this message, with its text in the composer"
+						onClick={() => branch(entryId)}
+					>
+						<PencilIcon />
+					</button>
+				)}
+				{reply.button}
+			</div>
+			<div className="incoming-content" {...reply.gesture}>
+				{item.replyTo && (
+					<button
+						type="button"
+						className="reply-quote"
+						title="Show the message this answers"
+						onClick={() => item.replyTo && void revealEntry(item.replyTo.entryId, reveal)}
+					>
+						<ReplyIcon size={12} />
+						<strong>{item.replyTo.name}</strong> {item.replyTo.excerpt}
+					</button>
+				)}
+				<Clamped text={item.text}>
+					{agent?.intent === "failed" ? (
+						<div className="incoming-plain">{item.text}</div>
+					) : (
+						<Markdown text={item.text} />
+					)}
+				</Clamped>
+				{item.files.length > 0 && (
+					<div className="bubble-files">
+						{item.files.map((file) => (
+							<span key={file}>{file}</span>
+						))}
+					</div>
+				)}
+				<Images images={item.images} />
+				{item.note && <div className="bubble-note">{item.note}</div>}
+			</div>
 		</div>
 	);
 }
 
-/** A person's message: an input, or a display-only entry (chat). People's messages can be replied to. */
+/** A body cut after about eight lines, with "Show more" when it is longer; `text` names what it shows. */
+function Clamped({ text, children }: { text: string; children: ReactNode }) {
+	const body = useRef<HTMLDivElement>(null);
+	const [long, setLong] = useState(false);
+	const [open, setOpen] = useState(false);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: measured again when the text changes.
+	useLayoutEffect(() => {
+		const element = body.current;
+		if (element && !open) setLong(element.scrollHeight > element.clientHeight + 1);
+	}, [text, open]);
+	return (
+		<>
+			<div className={`incoming-body ${open ? "" : "clamped"}`} ref={body}>
+				{children}
+			</div>
+			{long && (
+				<button type="button" className="incoming-more" aria-expanded={open} onClick={() => setOpen(!open)}>
+					{open ? "Show less" : "Show more"}
+				</button>
+			)}
+		</>
+	);
+}
+
+/** The owner's message (or an input without an author): a bubble. People's messages can be replied to. */
 function UserMessage({ item }: { item: Extract<Item, { type: "user" }> }) {
-	const openPeer = useContext(OpenPeerConversation);
 	const reveal = useContext(RevealEntry);
-	const peer = item.peer;
 	const reply = useReply(item.author ? item.entryId : undefined, item.author?.name ?? "");
 	const branch = useContext(BranchFrom);
 	// Only what reached the agent can be edited: a chat message (chat mode) is not part of its history.
 	const entryId = item.chat ? undefined : item.entryId;
 	return (
-		<div
-			className={`user ${item.author?.kind === "guest" ? "guest-message" : ""} ${item.chat ? "chat-message" : ""}`}
-			data-entry={item.entryId}
-		>
+		<div className={`user ${item.chat ? "chat-message" : ""}`} data-entry={item.entryId}>
 			{branch && entryId !== undefined && (
 				<button
 					type="button"
@@ -338,40 +482,17 @@ function UserMessage({ item }: { item: Extract<Item, { type: "user" }> }) {
 						title="Show the message this answers"
 						onClick={() => item.replyTo && void revealEntry(item.replyTo.entryId, reveal)}
 					>
+						<ReplyIcon size={12} />
 						<strong>{item.replyTo.name}</strong> {item.replyTo.excerpt}
 					</button>
 				)}
 				{item.author && (
-					<div
-						className="speaker"
-						style={
-							item.author.kind === "guest"
-								? {
-										color: `hsl(${[...item.author.id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 0)} 65% 55%)`,
-									}
-								: undefined
-						}
-					>
-						{item.author.kind === "owner" ? item.author.name : `${item.author.name} · guest`}
+					<div className="speaker">
+						{item.author.name}
 						{item.chat && " · chat"}
 					</div>
 				)}
-				{peer &&
-					(openPeer ? (
-						<button
-							type="button"
-							className="speaker footer-action"
-							aria-label={`Open conversation ${peer.title.trim() || "Conversation"}`}
-							onClick={() => openPeer(peer.id)}
-						>
-							{peer.title.trim() || "Conversation"} · agent
-						</button>
-					) : (
-						<div className="speaker" title={`Agent conversation ${peer.id}`}>
-							{peer.title.trim() || "Conversation"} · agent
-						</div>
-					))}
-				{item.peer ? <Markdown text={item.text} /> : item.text}
+				{item.text}
 				{item.files.length > 0 && (
 					<div className="bubble-files">
 						{item.files.map((file) => (
@@ -382,6 +503,25 @@ function UserMessage({ item }: { item: Extract<Item, { type: "user" }> }) {
 				<Images images={item.images} />
 				{item.note && <div className="bubble-note">{item.note}</div>}
 			</div>
+		</div>
+	);
+}
+
+/** A thinking block in place: "Thought", opened to its text with a tap; "Thinking…" while it streams. */
+function Thought({ item }: { item: Extract<ChatItem, { type: "thought" }> }) {
+	// Open at detail 4 (settings.json), also when the setting changes while it shows, until the reader toggles it.
+	const [toggled, setOpen] = useState<boolean>();
+	const open = toggled ?? Boolean(item.full);
+	return (
+		<div className={`thinking ${item.live ? "live" : ""}`} data-entry={item.entryId} data-testid="thought">
+			<button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
+				<SparkIcon size={15} />
+				<span>{item.live ? "Thinking…" : "Thought"}</span>
+				<span className={`chev ${open ? "open" : ""}`}>
+					<ChevronIcon size={14} />
+				</span>
+			</button>
+			{open && <div className="thinking-body">{item.text}</div>}
 		</div>
 	);
 }
@@ -434,15 +574,23 @@ const Answer = memo(function Answer({ item }: { item: Extract<ChatItem, { type: 
 
 const ItemView = memo(function ItemView({ item }: { item: ChatItem }) {
 	switch (item.type) {
-		case "user": {
-			// Subagents' messages (reports, questions, notes), from their entry data.
-			if (item.agent) return <Report name={item.agent.from.name} status={item.agent.intent} text={item.text} />;
-			return <UserMessage item={item} />;
-		}
+		case "user":
+			return incoming(item) ? <Incoming item={item} /> : <UserMessage item={item} />;
+		case "thought":
+			return <Thought item={item} />;
+		case "text":
+			return (
+				<div className="assistant" data-entry={item.entryId}>
+					<Markdown text={item.text} />
+				</div>
+			);
 		case "activity":
 			return (
 				<ActivityRow
+					rowKey={item.key}
 					steps={item.steps}
+					{...(item.entries ? { entries: item.entries } : {})}
+					{...(item.rows ? { rows: true } : {})}
 					working={item.working}
 					{...(item.startedAt ? { startedAt: item.startedAt } : {})}
 					{...(item.endedAt ? { endedAt: item.endedAt } : {})}
@@ -474,22 +622,42 @@ export type TranscriptRow = {
 	entryIds?: readonly number[];
 	item: ChatItem;
 	first: boolean;
-	/** An answer right after its turn's activity row: closer, the wheel's empty lower face already separates them. */
-	gap?: "answer";
+	/**
+	 * The spacing to the row before: a turn's parts (thinking, words, runs of calls, the answer, its results) follow each
+	 * other closely (`step`); everything else (a person's message, the first part after it, markers) starts a new turn.
+	 */
+	gap?: "step";
+	/**
+	 * The first part of the agent's turn: at least one row tall, as the working wheel it replaces (a first line of
+	 * words is shorter), so the turn never shrinks when its first part arrives.
+	 */
+	lead?: boolean;
 };
+
+/** The parts of the agent's turn, which follow each other at the step distance. */
+const TURN_PARTS: ReadonlySet<ChatItem["type"]> = new Set(["thought", "text", "activity", "answer", "results"]);
 
 /** Rows keep their identity while their item and spacing are unchanged. */
 const rowsOf = new WeakMap<ChatItem, { first: boolean; gap: TranscriptRow["gap"]; row: TranscriptRow }>();
 /**
- * The rows of a transcript: its items as the chat shows them (`chatItems`: each turn's activity, answer and results).
+ * The rows of a transcript: its items as the chat shows them (`chatItems`: each turn's thinking, texts and runs of
+ * calls in order, its answer and results). `tools`: the tools' contributions (`ToolActivities`); `detail`: how much
+ * of a turn the transcript shows (settings.json `detail`).
  * `working`: the agent is at it, so the last turn is live; `known`: `working` comes from the server's live state (not
  * yet while the transcript kept on this device shows).
  */
-export function transcriptRows(items: readonly Item[], working = false, known = true): TranscriptRow[] {
-	const shown = chatItems(items, working, known);
+export function transcriptRows(
+	items: readonly Item[],
+	tools: ToolActivityTable,
+	working = false,
+	known = true,
+	detail: Detail = DEFAULT_DETAIL,
+): TranscriptRow[] {
+	const shown = chatItems(items, working, known, tools, detail);
 	return shown.map((item, index) => {
 		const first = index === 0;
-		const gap = shown[index - 1]?.type === "activity" && item.type === "answer" ? "answer" : undefined;
+		const before = shown[index - 1];
+		const gap = before && TURN_PARTS.has(before.type) && TURN_PARTS.has(item.type) ? ("step" as const) : undefined;
 		const cached = rowsOf.get(item);
 		if (cached && cached.first === first && cached.gap === gap) return cached.row;
 		const row: TranscriptRow = {
@@ -499,6 +667,7 @@ export function transcriptRows(items: readonly Item[], working = false, known = 
 			item,
 			first,
 			...(gap ? { gap } : {}),
+			...(!gap && TURN_PARTS.has(item.type) ? { lead: true } : {}),
 		};
 		rowsOf.set(item, { first, gap, row });
 		return row;
@@ -609,6 +778,7 @@ export const Messages = memo(function Messages({
 							style={delay ? { animationDelay: `${delay}ms` } : undefined}
 							data-row={row.key}
 							data-gap={row.first ? undefined : row.gap}
+							data-lead={row.lead ? "" : undefined}
 							ref={list.rowRef}
 						>
 							<ItemView item={row.item} />
@@ -627,6 +797,7 @@ export const Messages = memo(function Messages({
 			{transcript.retry && (
 				<div className="notice">Provider error, retrying… {transcript.retry.error.slice(0, 200)}</div>
 			)}
+			<ActivityLayer rows={rows} />
 		</div>
 	);
 });

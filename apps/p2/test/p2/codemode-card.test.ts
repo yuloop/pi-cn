@@ -8,8 +8,10 @@ import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import type { ConversationView, EntryId, LiveState } from "@earendil-works/pi-durable";
 import type { CodemodeToolDetails } from "@earendil-works/pi-durable/codemode";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import { scriptCalls } from "../../plugins/codemode/nested.ts";
 import { transcriptComponent } from "../../src/tui/messages.ts";
 import { buildTranscript, type ToolView } from "../../src/web/transcript.ts";
+import { PLUGIN_TUI_RENDERERS } from "../fixtures/tui-tools.ts";
 import { wholeView } from "../fixtures/whole-view.ts";
 import { Browser, browserTests } from "./browser.ts";
 import { startFixture } from "./helpers.ts";
@@ -125,10 +127,16 @@ function settled(): ConversationView {
 	};
 }
 
-const codemode = (view: ConversationView): ToolView | undefined =>
-	buildTranscript(wholeView(view))
+/** The script's call, with its calls as code mode's contribution reads them (live, or its result's list). */
+const codemode = (view: ConversationView): ToolView | undefined => {
+	const tool = buildTranscript(wholeView(view))
 		.items.flatMap((item) => (item.type === "assistant" ? item.tools : []))
-		.find((tool) => tool.id === CALL);
+		.find((each) => each.id === CALL);
+	if (!tool) return;
+	const { calls: _, ...rest } = tool;
+	const calls = scriptCalls(tool);
+	return calls ? { ...rest, calls } : rest;
+};
 
 test("live nested calls are grouped under the model's call, with depth from the parent chain", () => {
 	const card = codemode(running());
@@ -188,7 +196,7 @@ test("settled calls come from the result's details.calls", () => {
 
 test("TUI shows pi's code mode card: the script, the newest nested calls by depth, then the output", () => {
 	const render = (view: ConversationView, expanded = false) =>
-		transcriptComponent(buildTranscript(wholeView(view)), false, expanded)
+		transcriptComponent(buildTranscript(wholeView(view)), false, expanded, { renderers: PLUGIN_TUI_RENDERERS })
 			.render(120)
 			.map((line) => stripTerminalSequences(line).trimEnd())
 			.join("\n");
@@ -234,10 +242,22 @@ test(
 			await browser.wait("document.querySelector('[data-testid=step] button')");
 			assert.match(
 				await browser.evaluate<string>("document.querySelector('[data-testid=step]').textContent"),
-				/Ran a script · 10 calls, 1 failed.*read every file/,
+				/^codemoderead every file● running/,
 			);
 			await browser.click("[data-testid=step] button");
+			// The newest eight calls, the rest behind "Show all", as the transcript's card had them.
+			await browser.wait("document.querySelectorAll('[data-testid=call]').length===8");
+			assert.equal(
+				await browser.evaluate("document.querySelector('[data-testid=calls-more]').textContent"),
+				"Show all 10 tool calls · 1 failed",
+			);
+			assert.match(await browser.evaluate<string>(`${call(7)}.textContent`), /Running npm test|npm test/);
+			await browser.click("[data-testid=calls-more]");
 			await browser.wait("document.querySelectorAll('[data-testid=call]').length===10");
+			assert.equal(
+				await browser.evaluate("document.querySelector('.sheet-head h2').textContent"),
+				"Ran a script · 10 calls, 1 failed",
+			);
 			// The script: highlighted JS, whole (8 lines need no Show all).
 			assert.equal(
 				await browser.evaluate("document.querySelector('[data-testid=detail-input] .hljs-keyword')!==null"),
