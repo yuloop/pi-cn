@@ -2,7 +2,7 @@
   "file": "packages/coding-agent/src/core/session-cwd.ts",
   "description": "pi 汉化词表：packages/coding-agent/src/core/session-cwd.ts",
   "replacements": {
-    "Stored session working directory does not exist: ${issue.sessionCwd}${sessionFile}\\nCurrent working directory: ${issue.fallbackCwd}": "会话中保存的工作目录不存在：${issue.sessionCwd}${sessionFile}\\n当前工作目录：${issue.fallbackCwd}",
-    "cwd from session file does not exist\\n${issue.sessionCwd}\\n\\ncontinue in current cwd\\n${issue.fallbackCwd}": "会话文件中的工作目录不存在\\n${issue.sessionCwd}\\n\\n将在当前工作目录继续\\n${issue.fallbackCwd}"
+    "Stored session working directory does not exist: ${issue.sessionCwd}${sessionFile}\\nCurrent working directory: ${issue.fallbackCwd}": "存储的会话工作目录不存在：${issue.sessionCwd}${sessionFile}\\n当前工作目录：${issue.fallbackCwd}",
+    "Session cwd does not exist: ${issue.sessionCwd}": "会话工作目录不存在：${issue.sessionCwd}"
   }
 }
