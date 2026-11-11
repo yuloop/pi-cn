@@ -23,7 +23,7 @@ import {
 import { type ReactNode, useCallback, useMemo } from "react";
 import { Models, type ResourceSnapshot } from "../models/contract.ts";
 import { type Session, Sessions } from "../sessions/contract.ts";
-import { type Child, Subagents } from "../subagents/contract.ts";
+import { type Child, modelRefOf, Subagents } from "../subagents/contract.ts";
 import { Chat } from "./contract.ts";
 import { newSessionChoice, thinkingLevelOf } from "./model-choice.ts";
 
@@ -243,8 +243,11 @@ function useModelTarget(resources: ResourceSnapshot | undefined): ModelTarget | 
 	}
 }
 
-/** A conversation target's id, `<session>/<conversation>`; it comes back from the menu's locator, so it is checked. */
-function conversationOf(id: string): { readonly session: string; readonly conversation: number } | undefined {
+/**
+ * Parses a "conversation" target's id, `<session>/<conversation>` (`viewTarget` in web.tsx writes it); it comes back
+ * from the menu's locator, so it is checked.
+ */
+export function conversationOf(id: string): { readonly session: string; readonly conversation: number } | undefined {
 	const slash = id.lastIndexOf("/");
 	const conversation = Number(id.slice(slash + 1));
 	return slash > 0 && Number.isInteger(conversation) && conversation > 0
@@ -254,12 +257,8 @@ function conversationOf(id: string): { readonly session: string; readonly conver
 
 /** A subagent's model as it reports it (`provider/modelId`, the model ID may hold more slashes). */
 function childChoice(child: Child): ModelChoice | undefined {
-	const slash = child.model.indexOf("/");
-	if (slash <= 0) return undefined;
-	return {
-		model: { provider: child.model.slice(0, slash), modelId: child.model.slice(slash + 1) },
-		thinkingLevel: thinkingLevelOf(child.thinkingLevel),
-	};
+	const model = modelRefOf(child.model);
+	return model && { model, thinkingLevel: thinkingLevelOf(child.thinkingLevel) };
 }
 
 /** Sets the model of a conversation (its worker starts if it is not running). */
