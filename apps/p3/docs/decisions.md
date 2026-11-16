@@ -373,3 +373,30 @@ older entries that say `docs/<file>` or `apps/p3/docs/<file>` now are `apps/p3/d
   (`src/kit/session-workers.ts`). A sign-in that ends (revoked, or expired unused) closes its own links at once,
   through the close function Chord's HTTP component now hands `links.opened(request, principal, close)`; not through
   `host.revoke`, which ends objects by principal and so would end the owner's shared objects for every device.
+- **The basics before iterating (owner, 2026-11-15):** slice 26 (the release build, the shipped package
+  `@earendil-works/p3` with types third-party plugins type-check against, the `p3` command with `server`, `status`,
+  `stop`, `restart`, a background supervisor, and several Pis on one machine by `--pi`/`--dir`), then slice 27 (a
+  terminal client scaffold that `p3` connects to), then slice 25 (sign-in with Radius); further arguments (mirroring
+  coding-agent's where sensible) are iterations on that base. The API is `@earendil-works/p3/v1`, no shorthand; the
+  built-in plugin is `@earendil-works/p3-sessions`; Chord exports the `Method` and `LiteralsSchema` types so
+  contracts can be named in declarations. The lockfile change of the rename is OK.
+- **Fable plans and reviews, never builds (owner, 2026-11-15):** builders are Opus; Fable writes designs, briefs and
+  reviews only. (Slice 14, the frame fixes, slice 1's redo and slice 26's first part were built by Fable before this
+  rule; each went through review rounds by Opus, Sol and Astra with mutation checks.)
+- **Correction (2026-11-15):** p3's sign-in cookie is `p3-<id>`, named after the Pi's random id (slice 26, several
+  Pis on one machine), not `p3-sign-in` as the slice 1 redo entry says. The API package is `@earendil-works/p3`.
+- **Stack traces in the release: names kept, no source maps (owner, 2026-11-16):** the release bundle keeps
+  identifiers (`minifySyntax` and `minifyWhitespace` only), as coding-agent's bundle does, so a raw stack names real
+  functions; no source maps ship. Mapping stacks to source positions (maps beside the bundle, a short-lived mapper
+  process for crashes and `p3 report`) is a nice-to-have for later, not planned. Identifiers stay unminified (owner,
+  2026-11-16, after the measurement: minifying them in the release and the worker base saves 1.1 MiB per idle worker
+  and 2.4 MiB on the server, 5 ms of a warm worker start; not worth unreadable stacks).
+- **Signing in a new device: the new device shows a code, a signed-in one approves it (owner, 2026-11-16):** a
+  browser or terminal without a sign-in gets the sign-in screen with the registered identity providers: Radius, and
+  pairing. Pairing shows a short single-use code on the new device (`K7QM-2PXF`); the owner approves it on a device
+  already signed in (`p3 pair <code>`, the local page, the terminal client), and the waiting device gets its own
+  sign-in, revocable on its own. No link travels, so the Pi never needs to know the address it is reached by (a
+  tunnel's domain, a LAN address). Passwords for the owner are out: a Pi exposed to the web would make them phishable
+  and guessable. The owner link printed at start stays as the first sign-in. Remote requests are accepted for any host name
+  (owner, 2026-11-16, same day): authority comes only from host-bound sign-ins; pairing codes expire within minutes,
+  the approval shows everything needed to judge the request, and pairing is rate-limited (slice 25, "Decided since").
