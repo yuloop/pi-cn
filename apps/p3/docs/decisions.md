@@ -400,3 +400,28 @@ older entries that say `docs/<file>` or `apps/p3/docs/<file>` now are `apps/p3/d
   and guessable. The owner link printed at start stays as the first sign-in. Remote requests are accepted for any host name
   (owner, 2026-11-16, same day): authority comes only from host-bound sign-ins; pairing codes expire within minutes,
   the approval shows everything needed to judge the request, and pairing is rate-limited (slice 25, "Decided since").
+- **The release gets a worker-only entry (owner, 2026-11-16):** a session worker (and the supervisor) loads a bundle of
+  its own instead of the chunk it shares with the server (esbuild's JS API, `ws`, `node:http`, the server side of
+  Chord's workers): about 1.5 MiB less per worker and a faster warm start (mem-audit, `p3-memory.md`). Built after slice
+  26's round-3 fixes, in slice 26.
+- **No build cache (owner, 2026-11-16):** nothing built is kept between starts, as Chord's decision "A" says: every
+  start builds the server's plugins and the worker base again (about 30 ms and 120 ms today). A cache keyed by what a
+  build read would save that, at the risk of serving old code after an edit; not built. To be measured again once p3
+  has many plugins.
+- **Chord's package is installed beside p3, accepted (owner, 2026-11-16):** an install of p3 also installs Chord's
+  whole package (about 15 MB: its sources, compiled components and declarations), because the shipped plugin API's
+  declarations and JavaScript import Chord (a plugin's type check and its own tests outside the server). The server
+  never loads it (its Chord is in the bundle). Accepted as it is; slimming Chord's package is a matter for publishing.
+- **Windows is a target; a running server proves its identity over HTTP (owner, 2026-11-16):** p3 runs on Linux,
+  macOS, Windows and Android. A command trusts a listening server's record only after asking that server, on the
+  recorded port with the owner token, who it is, and getting the record's own run id back: a reused pid cannot answer
+  as the server, on any platform. Process start times remain only for what does not listen (a starting server, a
+  supervisor), read on Windows through PowerShell; there `ps` does not exist.
+- **Slice 1 approved (owner, 2026-11-16):** the walkthrough is fine; slice 1 is committed together with slice 26.
+- **Session worker memory levers and a budget (owner, 2026-11-16):** workers get the measured safe levers: the
+  worker-only entry with splitting, the provider SDKs bundled, Chord's worker base minified, a warm compile cache
+  (`flushCompileCache()` after start), and `--liftoff-only`, `--optimize-for-size` and `--max-semi-space-size=4` in
+  their `execArgv`; background recompilation stays on (turning it off saves 1.5 to 2.5 MiB for up to 25% more CPU).
+  p3 enforces its minimum Node version at start, and every flag is checked in the supported versions. A memory test
+  in the release tests runs a real worker with Durable and pi-ai (stub provider), a burst and five parallel subagents,
+  and fails if the worker's USS ever exceeds 45 MiB.
