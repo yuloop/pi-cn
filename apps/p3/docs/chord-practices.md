@@ -105,8 +105,9 @@ test/server.test.ts  the plugin tier test of the server facet (`testPlugin` of `
 
 **One audience per contract.** The owner, a session's worker and the server never share a contract; what some callers
 of one audience may do and others not is a `grantable(...)` member or a flag their admission grants (Chord slice 15:
-`state: { history: grantable(...) }`, `methods: { send: grantable(method(...)) }`, `flags: { export: "…" }`). A worker
-reading its own session gets its own contract.
+`state: { history: grantable(...) }`, `methods: { send: grantable(method(...)) }`, `flags: { export:
+messages.message("…") }`, the label a message of the plugin's `messages.ts`, which the contract file may import: Chord's
+`plugin-authoring.md`, "What a plugin may import"). A worker reading its own session gets its own contract.
 
 ```ts
 // contract.ts: what other plugins and facets import
@@ -240,6 +241,14 @@ reference or a native.
   out).
 - Node flags go into the worker's `execArgv` (`apps/p3/src/install.ts`), never only into `npm test`.
 - A package that changes what the release ships runs `npm run release:p3:local` (`testing.md`).
+
+**Values handed to Chord**
+- Never change a value after you handed it to Chord (a state value, an admission's value, params, a method's
+  arguments or result, a condition): make a new one. Chord keeps it without a copy and compares by identity first, so
+  the same object changed in place reads as "unchanged": no rebuild, no update, nothing reported (Chord decision
+  "Values handed to Chord are never changed afterwards", 2026-11-26; `plugin-authoring.md`, "Values you hand to
+  Chord"). In-memory indexes that answer admissions (the things plugin's access index) hand out a new answer object
+  for every changed answer and keep the old one untouched.
 
 **Code** (the Chord v2 code style of the root `AGENTS.md`, for plugin code too)
 - One concept per file, named after it; the first line says what the file is for; the public entry first, helpers

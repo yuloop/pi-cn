@@ -3768,7 +3768,8 @@ From `research/chord-on-durable-objects.md`, adopted for the Chord v2 kernel bec
   their old pages and workers reload once (`contract_mismatch`); (3) `NORMAL_FORM_VERSION` stays 2: documents' stored
   fingerprints carry it, and the remote node's new shape (`members`, `grantable`, `flags`) changes remote
   fingerprints by itself; (4) a declared `admission` is an `obj(...)` without a field `granted`; (5) a flag's label is
-  plain English text, not a message (it is declared by code, the access UI shows it); (6) `useLive` keeps the
+  plain English text, not a message (it is declared by code, the access UI shows it; superseded by "Flag labels are
+  messages", 2026-11-26); (6) `useLive` keeps the
   reference while it loads again after it was live, a link drop included. Superseded: "C15 stands; the UI bindings
   follow the variant" and every rule about variants (§5, §7, §22, §23, §27 of `design.md` are rewritten).
 
@@ -3798,6 +3799,17 @@ From `research/chord-on-durable-objects.md`, adopted for the Chord v2 kernel bec
   is reported once (`link_closed`). Decided by the builder: a stall is sure to close nothing only when shorter than
   `close − ping` (the quiet time before it counts); `close` keeps its meaning.
 
+- **Flag labels are messages (Mario, 2026-11-26; the decisions of 2026-11-24 file, items 65 and 69; supersedes
+  slice 15's (B) "a flag's label is plain English text"):** everything that reaches the UI is a message, so it reads in
+  the viewer's language: `flags: { export: messages.message("flagExport") }`, the label a `MessageData` of the
+  plugin's `defineMessages` (`MessageData<N, K>`, the key a type error unless the catalog has it). It is plain data, so
+  a contract file holds it: a contract file may import its plugin's `messages.ts` (the rule: `plugin-authoring.md`,
+  "What a plugin may import"). Declaration refuses a label that is no message (`MessageSchema`: namespace, key, plain
+  parameters, nothing else) and checks no catalog: `messages.message(key)` checks the key against the catalog (by its
+  type); the fingerprint leaves labels out as before. The access UI renders a label with the
+  viewer's `t.render(label)` or passes it on as data. `MessageData` and `MessageSchema` are declared in the contracts
+  layer (`contracts/message.ts`, re-exported by the data layer as before), since contracts hold them.
+
 - **Refusals are static per provider and version (review of slice 15, 2026-11-26; spec `slice-15.md` §8, (B)):** a
   provider refuses an older version if that version has any refused member, whatever its caller was granted, as main
   had it; a consumer refused for a grantable member waits for a publication even if not granted it. Letting refusals
@@ -3807,6 +3819,16 @@ From `research/chord-on-durable-objects.md`, adopted for the Chord v2 kernel bec
 - **A reference makes its named queries on first use (spec `slice-15.md` §5, built 2026-11-25):** bench round 2: a
   reference to a store of 23 named queries cost 8.6 KiB, all of it handles nobody read. A `queries` member is an
   object whose handles are made by their first read and kept; labels are built when asked (6.35 to 1.30 KiB).
+
+- **Values handed to Chord are never changed afterwards, and Chord compares them by identity first (owner,
+  2026-11-26; the hot-path pass, `slices.md` "Hot paths", merged as `24dc95064`):** the rule "plain data, immutable by
+  convention" (L1 review round 1, R9) is now load-bearing, not only a convention. Chord keeps what it is handed (an
+  admission's value, a reference's params, a condition, a state value, a backend's rows) without a copy and compares
+  the same object as unchanged before it looks at fields. **The footgun:** code that mutates a value it handed Chord
+  and hands the same object again (an admission's `derive` returning one kept object with `granted` pushed to; a
+  `self.writable` set to the same array after `push`) is read as "nothing changed": no rebuild, no update, holders keep the
+  old value, and nothing reports it. Make a new object for every new value. No freezing, no development mode checks
+  it (R9): the guides say it (`plugin-authoring.md` "Values you hand to Chord", p3's `chord-practices.md`).
 
 ## Still valid from `target-design.md`
 
