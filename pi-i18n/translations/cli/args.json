@@ -126,7 +126,6 @@
     "- Session storage directory (overridden by --session-dir)": "- 会话存储目录（可用 --session-dir 覆盖）",
     "- Override package directory (for Nix/Guix store paths)": "- 覆盖包目录（用于 Nix/Guix store 路径）",
     "- Disable startup network operations when set to 1/true/yes": "- 设为 1/true/yes 时禁用启动网络操作",
-    "- Override install telemetry when set to 1/true/yes or 0/false/no": "- 设为 1/true/yes 或 0/false/no 时覆盖安装遥测",
     "- Base URL for /share command (default: https://pi.dev/session/)": "- /share 命令的基础 URL（默认：https://pi.dev/session/）"
   }
 }

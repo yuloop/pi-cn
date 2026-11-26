@@ -44,8 +44,6 @@
     "Show condensed changelog after updates": "更新后显示精简版更新日志",
     "Quiet startup": "安静启动",
     "Disable verbose printing at startup": "启动时不打印详细信息",
-    "Install telemetry": "安装遥测",
-    "Send an anonymous version/update ping after changelog-detected updates": "在检测到更新后发送匿名版本/更新通知",
     "Default project trust": "默认项目信任",
     "Fallback behavior when no extension or saved trust decision decides project trust": "没有扩展或已保存信任决定时对项目信任的默认行为",
     "Double-escape action": "双击 Esc 的行为",
