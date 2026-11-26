@@ -23,7 +23,6 @@
     "\"Working\"": "\"工作中\"",
     "\"Thinking...\"": "\"思考中...\"",
     "`${this.defaultWorkingMessage} (${keyText(\"app.interrupt\")} to interrupt)`": "`${this.defaultWorkingMessage}（按 ${keyText(\"app.interrupt\")} 中断）`",
-    "\"A bash command is already running. Press Esc to cancel it first.\"": "\"bash 命令正在运行，请先按 Esc 取消。\"",
     "\"Close active overlays before changing TUI mode\"": "\"切换 TUI 模式前请先关闭活动的浮层\"",
     "\"Model selection saved to settings\"": "\"模型选择已保存到设置\"",
     "\"No messages to fork from\"": "\"没有可派生的消息\"",
@@ -123,6 +122,7 @@
     "`${providerOption.method?.name ?? \"Authentication\"} is configured outside ${APP_NAME}.`": "`${providerOption.method?.name ?? \"认证\"}已在 ${APP_NAME} 之外配置。`",
     "`Saved trust decision: ${selection.trusted ? \"trusted\" : \"untrusted\"}. Restart ${APP_NAME} for this to take effect.`": "`已保存信任决定：${selection.trusted ? \"已信任\" : \"未信任\"}。重启 ${APP_NAME} 后生效。`",
     "rawKeyHint(\n\t\t\t\t\t\t`${keyText(\"app.model.cycleForward\")}/${keyText(\"app.model.cycleBackward\")}`,\n\t\t\t\t\t\t\"to cycle models\",\n\t\t\t\t\t)": "rawKeyHint(\n\t\t\t\t\t\t`${keyText(\"app.model.cycleForward\")}/${keyText(\"app.model.cycleBackward\")}`,\n\t\t\t\t\t\t\"切换模型\",\n\t\t\t\t\t)",
-    "`Session name set: ${displayName}`": "`会话名称已设置：${displayName}`"
+    "`Session name set: ${displayName}`": "`会话名称已设置：${displayName}`",
+    "A bash command is already running. Press ${keyText(\"app.interrupt\")} to cancel it first.": "已有 bash 命令在运行。按 ${keyText(\"app.interrupt\")} 先取消它。"
   }
 }

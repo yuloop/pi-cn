@@ -2,6 +2,6 @@
   "file": "packages/coding-agent/src/modes/interactive/components/bash-execution.ts",
   "description": "pi 汉化词表：packages/coding-agent/src/modes/interactive/components/bash-execution.ts",
   "replacements": {
-    "Running... (${keyText(\"tui.select.cancel\")} to cancel)": "运行中...（按 ${keyText(\"tui.select.cancel\")} 取消）"
+    "Running... (${keyText(\"app.interrupt\")} to cancel)": "运行中...（按 ${keyText(\"app.interrupt\")} 取消）"
   }
 }
