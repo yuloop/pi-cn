@@ -12,8 +12,8 @@
     "Failed to load sessions: ${message}": "加载会话失败：${message}",
     "Delete session? ${keyHint(\"tui.select.confirm\", \"confirm\")} · ${keyHint(\"tui.select.cancel\", \"cancel\")}": "删除会话？${keyHint(\"tui.select.confirm\", \"确认\")} · ${keyHint(\"tui.select.cancel\", \"取消\")}",
     "No sessions found": "未找到会话",
-    "No sessions in current folder. Press Tab to view all.": "当前文件夹中没有会话。按 Tab 查看全部。",
     "No named sessions found. Press ${toggleKey} to show all.": "未找到命名会话。按 ${toggleKey} 显示全部。",
-    "No named sessions in current folder. Press ${toggleKey} to show all, or Tab to view all.": "当前文件夹中没有命名会话。按 ${toggleKey} 显示全部，或按 Tab 查看所有会话。"
+    "  No sessions in current folder. Press ${keyText(\"tui.input.tab\")} to view all.": "  当前文件夹没有会话。按 ${keyText(\"tui.input.tab\")} 查看全部。",
+    "  No named sessions in current folder. Press ${toggleKey} to show all, or ${keyText(\"tui.input.tab\")} to view all.": "  当前文件夹没有命名会话。按 ${toggleKey} 显示全部，或按 ${keyText(\"tui.input.tab\")} 查看全部。"
   }
 }

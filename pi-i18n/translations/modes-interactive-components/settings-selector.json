@@ -40,8 +40,6 @@
     "Hide thinking blocks in assistant responses": "在智能体回复中隐藏思考块",
     "Mermaid diagrams": "Mermaid 图表",
     "Render Mermaid code blocks as Unicode diagrams": "将 Mermaid 代码块渲染为 Unicode 图表",
-    "Cache miss notices": "缓存未命中提示",
-    "Show transcript notices for cache costs and provider recovery diagnostics": "对缓存成本和服务商恢复诊断在记录中显示提示",
     "Collapse changelog": "折叠更新日志",
     "Show condensed changelog after updates": "更新后显示精简版更新日志",
     "Quiet startup": "安静启动",
@@ -83,6 +81,13 @@
     "Max visible items in autocomplete dropdown (3-20)": "自动补全下拉列表的最大可见条目数（3-20）",
     "Clear empty rows when content shrinks (may cause flicker)": "内容缩小时清除空行（可能导致闪烁）",
     "Show OSC 9;4 progress indicators in the terminal tab bar": "在终端标签栏显示 OSC 9;4 进度指示",
-    "Select a theme, or choose automatic to follow terminal appearance.": "选择主题，或选择 automatic 跟随终端外观。"
+    "Select a theme, or choose automatic to follow terminal appearance.": "选择主题，或选择 automatic 跟随终端外观。",
+    "Cache misses": "缓存未命中",
+    "Show a notice when a response re-bills a significant part of the prompt cache": "当响应重新计费了提示缓存的较大一部分时显示提示",
+    "Show the cost of cache warming requests": "显示缓存预热请求的费用",
+    "Compaction costs": "压缩开销",
+    "Show the cost of compactions and branch summaries": "显示压缩和分支摘要的费用",
+    "Reasoning drops": "推理项被丢弃",
+    "Show a notice when a provider drops reasoning items from a request": "当服务商从请求中丢弃推理项时显示提示"
   }
 }
