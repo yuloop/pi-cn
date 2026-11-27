@@ -122,10 +122,10 @@
     "- AWS secret key for Amazon Bedrock": "- Amazon Bedrock 的 AWS 密钥",
     "- Bedrock API key (bearer token)": "- Bedrock API 密钥（Bearer 令牌）",
     "- AWS region for Amazon Bedrock (e.g., us-east-1)": "- Amazon Bedrock 的 AWS 区域（例如 us-east-1）",
-    "- Config directory (default: ~/${CONFIG_DIR_NAME}/agent)": "- 配置目录（默认：~/${CONFIG_DIR_NAME}/agent）",
     "- Session storage directory (overridden by --session-dir)": "- 会话存储目录（可用 --session-dir 覆盖）",
     "- Override package directory (for Nix/Guix store paths)": "- 覆盖包目录（用于 Nix/Guix store 路径）",
     "- Disable startup network operations when set to 1/true/yes": "- 设为 1/true/yes 时禁用启动网络操作",
-    "- Base URL for /share command (default: https://pi.dev/session/)": "- /share 命令的基础 URL（默认：https://pi.dev/session/）"
+    "- Base URL for /share command (default: https://pi.dev/session/)": "- /share 命令的基础 URL（默认：https://pi.dev/session/）",
+    "- Config directory (default: ~/${CONFIG_DIR_NAME}/agent, overridden by --agent-dir)": "- 配置目录（默认：~/${CONFIG_DIR_NAME}/agent，可用 --agent-dir 覆盖）"
   }
 }
